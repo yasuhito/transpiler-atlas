@@ -1,0 +1,174 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromium } from 'playwright';
+
+const root = process.cwd();
+const url = pathToFileURL(path.join(root, 'index.html')).href;
+const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/results.json'), 'utf8'));
+const browser = await chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
+  headless: true,
+});
+const errors = [];
+const japanese = /[\u3040-\u30ff\u3400-\u9fff]/;
+const median = values => {
+  const xs = [...values].sort((a, b) => a - b);
+  return xs.length % 2 ? xs[Math.floor(xs.length / 2)] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2;
+};
+const gm = values => Math.exp(values.reduce((a, b) => a + Math.log(b), 0) / values.length);
+
+function expectedQuality(target, family, width, compiler) {
+  const cases = raw.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width));
+  const families = [...new Set(cases.map(c => c.family))];
+  return 100 * gm(families.map(f => gm(cases.filter(c => c.family === f).map(c => {
+    const rows = name => raw.results.filter(r => r.target === target && r.case_id === c.id && r.compiler === name);
+    const count = name => median(rows(name).map(r => r.metrics.two_qubit_count));
+    const depth = name => median(rows(name).map(r => r.metrics.two_qubit_depth));
+    return Math.sqrt((count('qiskit') + 1) / (count(compiler) + 1) * (depth('qiskit') + 1) / (depth(compiler) + 1));
+  }))));
+}
+
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+  await page.goto(url);
+  await page.waitForSelector('#result-rows tr');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  assert.equal(japanese.test(await page.locator('body').innerText()), false);
+  assert.equal(await page.locator('h1').innerText(), 'Benchmark results');
+  assert.equal(await page.locator('#result-rows tr').count(), 2);
+  assert.match(await page.locator('#dataset-meta').innerText(), /216\/216/);
+  const qualityCell = compiler => page.locator(`#result-rows tr[data-compiler="${compiler}"] td`).nth(2);
+  assert.equal(await qualityCell('qiskit').innerText(), '100.0');
+  assert.equal(await qualityCell('pytket').innerText(), expectedQuality('line', 'all', 'all', 'pytket').toFixed(1));
+  await page.screenshot({ path: '/tmp/transpiler-atlas-desktop.png', fullPage: true });
+
+  for (const target of ['line', 'all-to-all']) {
+    await page.selectOption('#target', target);
+    for (const family of ['QFT', 'QAOA', 'Adder']) {
+      await page.locator(`[data-family="${family}"]`).click();
+      assert.equal(await qualityCell('qiskit').innerText(), '100.0');
+      assert.equal(await qualityCell('pytket').innerText(), expectedQuality(target, family, 'all', 'pytket').toFixed(1));
+      assert.match(await page.locator('#selection-status').innerText(), /2 circuits/);
+      await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
+      assert.equal(await page.locator('#result-rows tr').count(), 4);
+      await page.getByRole('tab', { name: 'Matrix', exact: true }).click();
+      assert.equal(await page.locator('#result-rows tr').count(), 2);
+      await page.getByRole('tab', { name: 'Trade-off', exact: true }).click();
+      assert.equal(await page.locator('#chart circle').count(), 4);
+      await page.getByRole('tab', { name: 'Leaderboard', exact: true }).click();
+    }
+  }
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await page.selectOption('#metric', 'time');
+  let times = await page.locator('#result-rows tr td').allTextContents();
+  assert.ok(times.length > 0);
+  assert.equal(await page.locator('th[aria-sort="ascending"]').count(), 1);
+  const firstCompiler = await page.locator('#result-rows tr').first().getAttribute('data-compiler');
+  assert.equal(firstCompiler, 'qiskit');
+  await page.getByRole('button', { name: 'Sort by Quality', exact: true }).click();
+  assert.equal(await page.locator('#metric').inputValue(), 'quality');
+  assert.equal(await page.locator('th[aria-sort="descending"]').count(), 1);
+  const fullColumns = await page.locator('#result-head th').count();
+  await page.uncheck('#columns');
+  assert.equal(await page.locator('#result-head th').count(), fullColumns - 3);
+
+  // Compiler filtering must not change the reference computation.
+  await page.selectOption('#compiler', 'pytket');
+  assert.equal(await page.locator('#result-rows tr').count(), 1);
+  assert.equal(await qualityCell('pytket').innerText(), expectedQuality('line', 'all', 'all', 'pytket').toFixed(1));
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
+  await page.selectOption('#metric', 'time');
+  assert.equal(await page.locator('#result-rows tr').count(), 12);
+  times = await page.locator('#result-rows tr td:nth-child(5)').allTextContents();
+  assert.deepEqual(times.map(Number), times.map(Number).sort((a, b) => a - b));
+  await page.selectOption('#metric', 'count');
+  const counts = await page.locator('#result-rows tr td:nth-child(3)').allTextContents();
+  assert.deepEqual(counts.map(Number), counts.map(Number).sort((a, b) => a - b));
+  await page.screenshot({ path: '/tmp/transpiler-atlas-circuits.png', fullPage: true });
+  const qasm = page.getByRole('link', { name: 'QASM ↗', exact: true }).first();
+  assert.ok(fs.existsSync(fileURLToPath(new URL(await qasm.getAttribute('href'), page.url()))));
+
+  await page.getByRole('tab', { name: 'Matrix', exact: true }).click();
+  await page.selectOption('#metric', 'depth');
+  assert.equal(await page.locator('#result-rows tr').count(), 6);
+  const expected = expectedQuality('line', 'all', 'all', 'pytket');
+  assert.ok(expected > 0);
+  await page.screenshot({ path: '/tmp/transpiler-atlas-matrix.png', fullPage: true });
+  await page.getByRole('tab', { name: 'Trade-off', exact: true }).click();
+  assert.equal(await page.locator('#chart circle').count(), 12);
+  await page.selectOption('#plot-y', 'depth');
+  assert.match(await page.locator('#chart').innerHTML(), /2Q depth versus compile time/);
+  assert.equal(await page.evaluate(() => {
+    const boxes = [...document.querySelectorAll('.chart-label')].map(n => n.getBoundingClientRect());
+    return boxes.every((a, i) => boxes.slice(i + 1).every(b =>
+      !(a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top)));
+  }), true, 'Chart labels must not overlap');
+  await page.screenshot({ path: '/tmp/transpiler-atlas-tradeoff.png', fullPage: true });
+
+  // Permalinks preserve all filters and the view across reload, even on file://.
+  await page.selectOption('#target', 'all-to-all');
+  await page.locator('[data-family="QAOA"]').click();
+  await page.selectOption('#width', '6');
+  const permalink = await page.locator('#permalink').getAttribute('href');
+  await page.goto(permalink);
+  assert.equal(await page.locator('#target').inputValue(), 'all-to-all');
+  assert.equal(await page.locator('#width').inputValue(), '6');
+  assert.equal(await page.locator('#plot-y').inputValue(), 'depth');
+  assert.equal(await page.getByRole('tab', { name: 'Trade-off', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.locator('#chart circle').count(), 2);
+
+  // No data for QFT at 8 qubits: explicit empty state, no synthetic entries.
+  await page.locator('[data-family="QFT"]').click();
+  await page.selectOption('#width', '8');
+  assert.equal(await page.locator('#empty').isVisible(), true);
+  await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
+  assert.equal(await page.locator('#result-rows tr').count(), 2);
+  await page.getByRole('tab', { name: 'Leaderboard', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await page.getByRole('tab', { name: 'Per circuit', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('End');
+  assert.equal(await page.getByRole('tab', { name: 'Trade-off', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('Home');
+
+  const links = await page.locator('a[href]').evaluateAll(nodes => nodes.map(n => n.href));
+  for (const href of links) {
+    if (href.startsWith('file:')) assert.ok(fs.existsSync(fileURLToPath(new URL(href))), href);
+  }
+  await page.locator('#environment summary').click();
+  assert.match(await page.locator('#environment-fields').innerText(), /pytket/);
+  for (const name of ['pilot', 'methodology', 'research', 'design']) {
+    await page.goto(pathToFileURL(path.join(root, 'docs', name + '.html')).href);
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+    assert.equal(japanese.test(await page.locator('body').innerText()), false, name);
+    const localLinks = await page.locator('a[href]').evaluateAll(nodes => nodes.map(n => n.href));
+    for (const href of localLinks) if (href.startsWith('file:')) assert.ok(fs.existsSync(fileURLToPath(new URL(href))), href);
+  }
+
+  await page.goto(url);
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: '/tmp/transpiler-atlas-mobile.png', fullPage: true });
+  await page.getByRole('tab', { name: 'Trade-off', exact: true }).click();
+  await page.locator('[data-family="QAOA"]').click();
+  assert.equal(await page.locator('#chart circle').count(), 4);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: '/tmp/transpiler-atlas-mobile-plot.png', fullPage: true });
+
+  // Incomplete entries must not receive a surviving-case score.
+  await page.evaluate(() => {
+    data.results.find(r => r.target === 'line' && r.family === 'QAOA' && r.compiler === 'pytket').status = 'timeout';
+    state.view = 'leaderboard'; state.metric = 'quality'; render();
+  });
+  assert.equal(await qualityCell('pytket').innerText(), 'N/A');
+  await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
+  assert.match(await page.locator('#result-rows').innerText(), /Incomplete/);
+  assert.deepEqual(errors, []);
+  console.log('Browser checks passed: four views, filters, score calculations, sorting, columns, permalinks, English docs, keyboard controls, mobile, incomplete data.');
+} finally {
+  await browser.close();
+}

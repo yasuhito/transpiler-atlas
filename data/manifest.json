@@ -1,0 +1,138 @@
+[
+  {
+    "id": "qft-4q",
+    "family": "QFT",
+    "qubits": 4,
+    "parameters": {
+      "variant": "exact QFT, including output reversal"
+    },
+    "path": "data/inputs/qft-4q.qasm",
+    "sha256": "3803a0e003593e49dd2a77411d9b237325ccd57bb40f6a0bcf1c7f638659a802",
+    "input_gate_count": 40
+  },
+  {
+    "id": "qft-6q",
+    "family": "QFT",
+    "qubits": 6,
+    "parameters": {
+      "variant": "exact QFT, including output reversal"
+    },
+    "path": "data/inputs/qft-6q.qasm",
+    "sha256": "31e0a7b5ec6b31c862e2fe60b094f61dd58a6cab22e8276db527f906c5e919c8",
+    "input_gate_count": 90
+  },
+  {
+    "id": "qaoa-4q",
+    "family": "QAOA",
+    "qubits": 4,
+    "parameters": {
+      "graph": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "p": 2,
+      "gamma": [
+        0.37,
+        0.61
+      ],
+      "beta": [
+        0.23,
+        0.49
+      ]
+    },
+    "path": "data/inputs/qaoa-4q.qasm",
+    "sha256": "05bebb811e52758dd6dda1d97d38e5dff3f80323dc1ee63b3001bc360885574d",
+    "input_gate_count": 42
+  },
+  {
+    "id": "qaoa-6q",
+    "family": "QAOA",
+    "qubits": 6,
+    "parameters": {
+      "graph": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "p": 2,
+      "gamma": [
+        0.37,
+        0.61
+      ],
+      "beta": [
+        0.23,
+        0.49
+      ]
+    },
+    "path": "data/inputs/qaoa-6q.qasm",
+    "sha256": "715580c150526450ae7a5156572374b266fe8c4cafac54bf68bf106a61f6a3fc",
+    "input_gate_count": 60
+  },
+  {
+    "id": "adder-6q",
+    "family": "Adder",
+    "qubits": 6,
+    "parameters": {
+      "register_bits": 2,
+      "kind": "full CDKM ripple-carry"
+    },
+    "path": "data/inputs/adder-6q.qasm",
+    "sha256": "3fb631476a3404295f8a73b23f198855872b46a7ffd587ffb8dfe4a71d89f831",
+    "input_gate_count": 69
+  },
+  {
+    "id": "adder-8q",
+    "family": "Adder",
+    "qubits": 8,
+    "parameters": {
+      "register_bits": 3,
+      "kind": "full CDKM ripple-carry"
+    },
+    "path": "data/inputs/adder-8q.qasm",
+    "sha256": "ea0837e4fc8885524a2ab4577785d4563bbb3c1cfdc35264e0c7e6a02a2b67cd",
+    "input_gate_count": 103
+  }
+]
