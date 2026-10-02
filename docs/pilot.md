@@ -46,7 +46,7 @@ This is a **common low-level input track**, not a generator-independent high-lev
 
 ## Release preservation
 
-[Pilot v0.1](../releases/pilot-v0.1/index.html) and [Pilot v0.2](../releases/pilot-v0.2/index.html) preserve their original reports, raw data, artifacts, documentation, runners, and dependency locks. v0.2 also retains its corpus sources. The v0.2 snapshot includes its linked v0.1 archive so its original relative links remain usable without rewriting historical HTML. Current results are a new measurement of all 12 cases, not a merge of old and new timings. Cross-release absolute timing comparisons are not controlled comparisons.
+Earlier published measurement snapshots and their source/dependency trees are retained in the repository under `releases/`, but are not linked from the current site. Current results are a new measurement of all 12 cases, not a merge of old and new timings. Cross-release absolute timing comparisons are not controlled comparisons.
 
 The runner refuses a suite change without a matching archived results file. Repeating v0.3 requires `--overwrite`; preserve another snapshot first if the rerun must remain available. Tests generate inputs in temporary directories rather than changing published inputs.
 
@@ -62,7 +62,7 @@ The pytket pipeline is explicit and specific to this experiment, not a claim abo
 
 ## Timing and environment
 
-12 circuits in six families × 2 targets × 3 compilers × 3 seed slots = 216 scheduled entries, each with three compilation repetitions (648 potential output checks). All 216 entries completed without timeout or worker error. Of 648 recorded outputs, 597 passed the strict check; the other 51 are from 17 BQSKit line-target entries. Qiskit and pytket each passed all 72 entries; BQSKit passed 55 of 72. BQSKit verification failures retain their raw measurements in every UI view. Their verified scores are labeled Not scored, not a surviving-case score. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
+12 circuits in six families × 2 targets × 3 compilers × 3 seed slots = 216 scheduled entries, each with three compilation repetitions (648 potential output checks). All 216 entries completed without timeout or worker error. Of 648 recorded outputs, 597 passed the strict check; the other 51 are from 17 BQSKit line-target entries. Qiskit and pytket each passed all 72 entries; BQSKit passed 55 of 72. BQSKit verification failures retain their raw measurements in every UI view. Their Quality and Speed scores include a pass-rate penalty and an asterisk, rather than being hidden. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
 
 The machine is shared. The runner pins affinity to the first permitted CPU and sets thread environment variables to one. CPU frequency, sibling hardware threads, and other jobs are not controlled. It is not an exclusive-machine measurement. Full metadata is in [results.json](../data/results.json).
 
@@ -86,22 +86,40 @@ During development, the adder exposed a mapping bug in the measurement code: Qis
 
 ## Scores and UI views
 
-Scores are exploratory comparisons for the selected target and circuit set, not formal suite scores. The reference is the measured Qiskit level 2 run, with its version recorded alongside the data.
+The current score version is **`qcec-adjusted-v1`**, shown in the report and embedded JSON. This is an exploratory benchmark rule, not the earlier all-or-nothing verified score, and not the proposed formal suite score. Earlier scores must not be compared directly with this version. The v0.3 measurement bytes, input hashes, compiler pipelines, and QCEC acceptance settings are unchanged; only presentation and scoring change.
 
-For one circuit:
+First compute unpenalized performance for each circuit from every available measured seed slot, including verification-failed outputs:
 
 ```text
-Quality = 100 × sqrt((G_ref + 1)/(G + 1) × (D_ref + 1)/(D + 1))
-Speed   = 100 × max(T_ref, 1 ms)/max(T, 1 ms)
+Quality before penalty = 100 × sqrt((G_ref + 1)/(G + 1) × (D_ref + 1)/(D + 1))
+Speed before penalty   = 100 × max(T_ref, 1 ms)/max(T, 1 ms)
 ```
 
-G is the median 2Q count, D the median 2Q depth, and T the nested median compile time. Within each family, ratios are combined by geometric mean. Families then receive equal weight in a geometric mean. `+1` is disclosed smoothing for zero counts, not a physical cost model.
+G is median 2Q count, D is median 2Q depth, and T is nested median compile time. The reference is the same run's measured Qiskit level 2 configuration. Its unpenalized performance is anchored at 100; its displayed adjusted score would be lower if its own QCEC checks failed. `+1` smoothing and the 1 ms floor are benchmark choices, not a physical cost model.
 
-- **Leaderboard:** verified, family-balanced Quality/Speed plus raw count, depth, and time medians across measured circuits, including unverified outputs. Raw medians are not normalized or family-balanced scores. Coverage separates measured circuits from fully QCEC-passed circuits; unverified and partial measurements are labeled. Unverified selections are not ranked, even when sorted by a raw metric. Detailed columns show each family's verified Quality score.
-- **Per circuit:** raw medians, optional verified scores, timing ranges, separate output-rule and equivalence results, measurement/verification slot coverage, and output links.
-- **Matrix:** raw values remain visible for unverified outputs, labeled even when detailed columns are off. Shading marks the best fully verified value in each row, including ties, not statistical significance.
-- **Trade-off:** every available raw compile-time/count or depth pair is plotted. Filled points passed all required checks; hollow points are unverified or partial. Tooltips and accessible descriptions retain check and measurement coverage. The plot is not a verified ranking.
+For a family or complete selected set, combine unpenalized per-circuit performance by geometric mean within each family, then geometric mean across families. Families receive equal weight **for performance**. Then apply one pass-rate factor for exactly that selected set:
 
-Any missing required seed slot or failed equivalence check withholds the verified score, displayed as Not scored; its rank is Not ranked. Raw measurements remain visible. N/A is reserved for a raw metric with no recorded measurement. No relaxed tolerance, approximate track, or silent successful-subset score is introduced by this display change. The v0.3 measurement bytes, input hashes, acceptance criteria, and score formulas are unchanged. Compiler filtering does not remove the Qiskit reference from calculation. Filters can change the selected set and therefore the scores; values from different sets are not directly comparable. URL fragments preserve view/filter state.
+```text
+QCEC pass rate = passed required seed slots / all required seed slots
+Quality = Quality before penalty × QCEC pass rate
+Speed   = Speed before penalty × QCEC pass rate
+```
+
+Each required seed slot receives equal weight in this factor. A slot passes only if the worker status is passed and all three recorded output repetitions are accepted by QCEC. Failed, missing, timed-out, or ambiguous duplicate seed slots do not count as passed; the denominator remains the predefined number of selected circuits × three seeds. The factor is not the percentage of fully verified circuits, and not a percentage of hardware shots. Geometrically averaging already-penalized circuit scores is deliberately avoided: one zero does not automatically zero an entire family that has other passing slots.
+
+Examples: QFT on the BQSKit line target has 4/9 passed slots, so its family score is its unpenalized performance × 4/9. BQSKit's full line selection has 19/36 passed slots, so its aggregate uses 19/36. For the 4-qubit Atlas QFT alone, the factor is 1/3. If no slot passes but measurements are available, Quality and Speed are zero, not N/A.
+
+Scores with a pass rate below 100% carry **`*`** and a tinted cell. Hover text and the marked cell's keyboard/mobile-accessible Details control show performance before penalty, passed/required slots, and pass rate. Quality scores use one decimal; positive Speed scores below 1 use three decimals so small values remain visible. The footnote explains that the reduction includes failed or missing checks. This makes incomplete acceptance visible, not equivalent to fully verified output. Output-rule checks remain separate from QCEC.
+
+N/A means a required raw metric or Qiskit reference is unavailable. Partial measured slots can provide a provisional performance median and score; their missing checks remain in the penalty denominator, and partial coverage is labeled. If any selected circuit lacks the metric needed for an aggregate score, that aggregate is N/A rather than silently dropping the circuit. Raw count/depth/time medians remain available over recorded values. No measurement or score is invented for a wholly unmeasured circuit.
+
+The linear penalty is a declared policy choice. It treats each unaccepted slot equally, regardless of how near it was to QCEC's numerical tolerance. It does not measure approximation error, distinguish a tiny numerical difference from a large logical mismatch, or estimate quantum hardware success. Both Quality and Speed use the same penalty; raw compile time remains an unpenalized timing measurement. Future continuous-error or alternative penalty rules require another named score version.
+
+- **Leaderboard:** adjusted Quality/Speed ranks, raw metric medians, family-adjusted Quality columns, measured-circuit coverage, and QCEC slot counts. Raw medians are neither normalized nor family-balanced. Sorting by raw metrics still ranks only fully verified outputs.
+- **Per circuit:** adjusted scores, raw medians, timing ranges, separate output-rule and equivalence results, slot coverage, and QASM links.
+- **Matrix:** adjusted scores include the penalty, asterisk, tint, and Details. Best-value shading compares adjusted scores; for raw metrics it only compares fully verified outputs. Verification labels remain visible even with detailed columns off.
+- **Trade-off:** every available raw time/count or depth pair is plotted. Filled points passed all required checks; hollow points are unverified or partial. The plot is not a score ranking.
+
+Compiler filtering retains the Qiskit reference and does not change the selected circuit set. Target, family, and width filters change that set, its pass-rate denominator, and its scores. Values from different selections or score versions are not directly comparable. URL fragments preserve view/filter state.
 
 The small suite does not establish general SDK superiority, quantum hardware success probability, or performance on unmeasured algorithms such as Shor.

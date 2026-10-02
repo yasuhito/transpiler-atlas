@@ -14,7 +14,7 @@ Open [`index.html`](index.html) directly in a browser. No server is needed. Data
 
 Views:
 
-- **Leaderboard:** family-balanced Quality/Speed scores, raw metric medians, family breakdowns, completion.
+- **Leaderboard:** QCEC-adjusted Quality/Speed scores, raw metric medians, family breakdowns, and coverage.
 - **Per circuit:** individual measurements, validation, timing ranges, output QASM.
 - **Matrix:** circuit/compiler comparisons for a selected metric.
 - **Trade-off:** compile time against 2Q count or depth.
@@ -48,18 +48,19 @@ Open `http://localhost:8765/`. Deploy the site tree together with `web/`, `docs/
 
 ## Implemented pilot
 
-Pilot v0.3: 12 circuits × 2 topologies × 3 compilers × 3 seed slots, with three repetitions each: 216 scheduled entries and up to 648 output checks. All 216 entries completed; 597/648 outputs passed strict validation. BQSKit had 17 verification-failed line-target entries; all 36 of its all-to-all entries passed. BQSKit outputs that fail the unchanged strict QCEC check remain unverified, but their gate counts, depths, and times are displayed. Verified scores are withheld (Not scored); raw measurements are not hidden and the verifier is not relaxed.
+Pilot v0.3: 12 circuits × 2 topologies × 3 compilers × 3 seed slots, with three repetitions each: 216 scheduled entries and up to 648 output checks. All 216 entries completed; 597/648 outputs passed strict validation. BQSKit had 17 verification-failed line-target entries; all 36 of its all-to-all entries passed. BQSKit outputs that fail the unchanged strict QCEC check remain unverified, but their gate counts, depths, and times are displayed. Scores use **`qcec-adjusted-v1`**: unpenalized performance × QCEC pass rate. Failed or missing checks reduce the score rather than hiding it; `*`, tinted cells, and Details expose the penalty. Raw measurements are not hidden and the verifier is not relaxed.
 
 - Six families: QFT, QAOA, Adder, Grover, VQE, Hamiltonian. Six original generated circuits plus six fixed QASMBench imports.
 - [Corpus sources and license review](docs/corpora.md); original QASM, license, parameters, and source/input hashes are retained. Expand Input details in the per-circuit view.
-- [Pilot v0.1](releases/pilot-v0.1/index.html) and [Pilot v0.2](releases/pilot-v0.2/index.html) retain their original reports, measurements, artifacts, sources, and dependency locks.
+- Earlier measurement snapshots and their sources/dependency locks remain in `releases/`, without links from the current site.
 - [BQSKit adapter](docs/bqskit.md): standard level 1, two-qubit blocks, synthesis epsilon `1e-12`, seeded, one local worker/BLAS thread, returned wire maps, unchanged QCEC acceptance.
 - Targets: Atlas-designed synthetic input-width all-to-all and line, bidirectional CX. These are not named hardware devices, corpus requirements, or adopted standard specifications.
 - Native basis: `rz,sx,x,cx`.
 - Shared host, single-core affinity; not an exclusive controlled machine.
 - Frozen low-level OpenQASM 2 inputs lowered by Qiskit level 0; not a high-level-neutral input track. Corpus barriers and per-wire terminal readout are removed; preparation gates remain.
 - pytket does not use the seed in this pipeline. Its seed slots represent repeated measurements.
-- Quality and Speed use the same measured Qiskit reference = 100. Missing or unverified required trials withhold verified scores and ranks, not raw metrics. N/A means no measurement was recorded.
+- Unpenalized Quality/Speed use a measured Qiskit reference = 100 and equal family weights. Both displayed scores multiply that performance by passed/required QCEC seed slots. Missing slots stay in the denominator; measured outputs with no passing slots score zero.
+- N/A means required raw metrics or Qiskit reference values are unavailable. Do not silently omit wholly unmeasured circuits from aggregate scores. Earlier all-or-nothing scores are not directly comparable to this score version.
 - Output rules (gates, connections, width) and strict equivalence checks are displayed separately. All measured outputs appear in the plot: filled for fully verified, hollow otherwise. Partial raw medians are labeled.
 
 See [pilot protocol](docs/pilot.md) / [HTML](docs/pilot.html) for precision, maps, timing boundaries, and limitations.

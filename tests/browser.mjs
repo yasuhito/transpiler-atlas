@@ -9,9 +9,10 @@ const url = pathToFileURL(path.join(root, 'index.html')).href;
 const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/results.json'), 'utf8'));
 const compilers = raw.protocol.compilers ?? ['qiskit', 'pytket'];
 const nc = compilers.length;
-const complete = (c, target, compiler) => {
-  const rows = raw.results.filter(r => r.target === target && r.case_id === c.id && r.compiler === compiler);
-  return rows.length === raw.protocol.seeds.length && rows.every(r => r.status === 'passed');
+const passRate = (target, family, width, compiler) => {
+  const cases = raw.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width));
+  const rows = raw.results.filter(r => cases.some(c => c.id === r.case_id) && r.target === target && r.compiler === compiler);
+  return rows.filter(r => r.status === 'passed' && r.trials?.length === raw.protocol.timing_repeats && r.trials.every(t => t.validation.accepted)).length / (cases.length * raw.protocol.seeds.length);
 };
 const plotted = (target, family = 'all', width = 'all') => raw.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width)).reduce((n, c) => n + compilers.filter(compiler => raw.results.some(r => r.target === target && r.case_id === c.id && r.compiler === compiler && Number.isFinite(r.compile_ms) && Number.isFinite(r.metrics?.two_qubit_count))).length, 0);
 const browser = await chromium.launch({
@@ -28,14 +29,13 @@ const gm = values => Math.exp(values.reduce((a, b) => a + Math.log(b), 0) / valu
 
 function expectedQuality(target, family, width, compiler) {
   const cases = raw.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width));
-  if (cases.some(c => !complete(c, target, compiler) || !complete(c, target, 'qiskit'))) return NaN;
   const families = [...new Set(cases.map(c => c.family))];
   return 100 * gm(families.map(f => gm(cases.filter(c => c.family === f).map(c => {
     const rows = name => raw.results.filter(r => r.target === target && r.case_id === c.id && r.compiler === name);
     const count = name => median(rows(name).map(r => r.metrics.two_qubit_count));
     const depth = name => median(rows(name).map(r => r.metrics.two_qubit_depth));
     return Math.sqrt((count('qiskit') + 1) / (count(compiler) + 1) * (depth('qiskit') + 1) / (depth(compiler) + 1));
-  }))));
+  })))) * passRate(target, family, width, compiler);
 }
 
 try {
@@ -54,7 +54,8 @@ try {
   const accepted = trials.filter(t => t.validation.accepted).length;
   assert.ok((await page.locator('#dataset-meta').innerText()).includes(`${accepted}/${trials.length}`));
   assert.equal(await page.getByRole('link', { name: 'Design references', exact: true }).count(), 0);
-  const qualityCell = compiler => page.locator(`#result-rows tr[data-compiler="${compiler}"] td`).nth(2);
+  assert.equal(await page.locator('a[href*="releases/"]').count(), 0);
+  const qualityCell = compiler => page.locator(`#result-rows tr[data-compiler="${compiler}"] td`).nth(2).locator('.score-value');
   assert.equal(await qualityCell('qiskit').innerText(), '100.0');
   assert.equal(await qualityCell('pytket').innerText(), expectedQuality('line', 'all', 'all', 'pytket').toFixed(1));
   await page.screenshot({ path: '/tmp/transpiler-atlas-desktop.png', fullPage: true });
@@ -68,7 +69,7 @@ try {
       assert.equal(await qualityCell('qiskit').innerText(), '100.0');
       for (const compiler of compilers) {
         const expected = expectedQuality(target, family, 'all', compiler);
-        assert.equal(await qualityCell(compiler).innerText(), Number.isNaN(expected) ? 'Not scored' : expected.toFixed(1));
+        assert.equal(await qualityCell(compiler).innerText(), expected.toFixed(1) + (passRate(target, family, 'all', compiler) < 1 ? '*' : ''));
       }
       assert.ok((await page.locator('#selection-status').innerText()).includes(`${n} circuits`));
       await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
@@ -103,7 +104,7 @@ try {
     await page.selectOption('#compiler', 'bqskit');
     assert.equal(await page.locator('#result-rows tr').count(), 1);
     const expected = expectedQuality('line', 'all', 'all', 'bqskit');
-    assert.equal(await qualityCell('bqskit').innerText(), Number.isNaN(expected) ? 'Not scored' : expected.toFixed(1));
+    assert.equal(await qualityCell('bqskit').innerText(), expected.toFixed(1) + '*');
     const permalink = await page.locator('#permalink').getAttribute('href');
     await page.goto(permalink);
     assert.equal(await page.locator('#compiler').inputValue(), 'bqskit');
@@ -218,12 +219,12 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await page.screenshot({ path: '/tmp/transpiler-atlas-mobile-plot.png', fullPage: true });
 
-  // Incomplete entries must not receive a surviving-case score.
+  // An unchecked slot reduces the score; it is not silently dropped.
   await page.evaluate(() => {
     data.results.find(r => r.target === 'line' && r.family === 'QAOA' && r.compiler === 'pytket').status = 'timeout';
     state.view = 'leaderboard'; state.metric = 'quality'; render();
   });
-  assert.equal(await qualityCell('pytket').innerText(), 'Not scored');
+  assert.equal(await qualityCell('pytket').innerText(), (expectedQuality('line', 'QAOA', 'all', 'pytket') * 8 / 9).toFixed(1) + '*');
   await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
   assert.match(await page.locator('#result-rows').innerText(), /Incomplete/);
   assert.deepEqual(errors, []);

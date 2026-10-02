@@ -9,11 +9,13 @@ from pathlib import Path
 import markdown
 
 ROOT = Path(__file__).resolve().parent
+SCORE_VERSION = "qcec-adjusted-v1"
 
 
 def build() -> None:
     data = json.loads((ROOT / "data/results.json").read_text())
     display = copy.deepcopy(data)
+    display["score_version"] = SCORE_VERSION
     for row in display["results"]:
         for trial in row.get("trials", []):
             trial["validation"].pop("details", None)

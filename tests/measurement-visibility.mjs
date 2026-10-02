@@ -16,6 +16,14 @@ const median = values => {
 const samples = raw.results.filter(r => r.target === 'line' && r.compiler === 'bqskit' && r.case_id === 'qft-4q');
 const expected = rows => [median(rows.map(r => r.metrics?.two_qubit_count)), median(rows.map(r => r.metrics?.two_qubit_depth)), median(rows.map(r => r.compile_ms))];
 const displayed = values => values.map((v, i) => v === null ? 'N/A' : i === 2 ? v.toFixed(2) : String(v));
+const slotPassed = r => r.status === 'passed' && r.trials?.length === raw.protocol.timing_repeats && r.trials.every(t => t.validation.accepted);
+const reference = id => raw.results.filter(r => r.target === 'line' && r.compiler === 'qiskit' && r.case_id === id);
+const rawQuality = (rows, ref) => 100 * Math.sqrt((median(ref.map(r => r.metrics.two_qubit_count)) + 1) / (median(rows.map(r => r.metrics.two_qubit_count)) + 1) * (median(ref.map(r => r.metrics.two_qubit_depth)) + 1) / (median(rows.map(r => r.metrics.two_qubit_depth)) + 1));
+const qualityText = rows => (rawQuality(rows, reference('qft-4q')) * rows.filter(slotPassed).length / raw.protocol.seeds.length).toFixed(1) + '*';
+const selectedCases = raw.cases.filter(c => c.family === 'QFT' && c.qubits === 4);
+const selectedRows = raw.results.filter(r => selectedCases.some(c => c.id === r.case_id) && r.target === 'line' && r.compiler === 'bqskit');
+const leaderBase = Math.exp(selectedCases.reduce((n, c) => n + Math.log(rawQuality(selectedRows.filter(r => r.case_id === c.id), reference(c.id))), 0) / selectedCases.length);
+const leaderQuality = leaderBase * selectedRows.filter(slotPassed).length / (selectedCases.length * raw.protocol.seeds.length);
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -31,7 +39,7 @@ try {
   assert.match(await row().innerText(), /Strict check failed/);
   assert.match(await row().innerText(), /QCEC 1\/3/);
   await page.selectOption('#metric', 'quality');
-  assert.equal(await cells().nth(2).innerText(), 'Not scored');
+  assert.equal(await cells().nth(2).locator('.score-value').innerText(), qualityText(samples));
   assert.equal(await cells().nth(3).innerText(), displayed(expected(samples))[0]);
   await page.uncheck('#columns');
   assert.match(await row().innerText(), /Strict check failed/);
@@ -39,7 +47,7 @@ try {
 
   await page.getByRole('tab', { name: 'Leaderboard', exact: true }).click();
   const leader = () => page.locator('#result-rows tr[data-compiler="bqskit"]');
-  assert.equal(await leader().locator('td').nth(2).innerText(), 'Not scored');
+  assert.equal(await leader().locator('td').nth(2).locator('.score-value').innerText(), leaderQuality.toFixed(1) + '*');
   for (const i of [4, 5, 6]) assert.notEqual(await leader().locator('td').nth(i).innerText(), 'N/A');
   assert.match(await leader().innerText(), /Unverified measurements/);
   await page.selectOption('#metric', 'count');
@@ -73,7 +81,7 @@ try {
   assert.match(await row().innerText(), /Partial measurements/);
   assert.match(await row().innerText(), /Output rules not fully checked/);
   await page.selectOption('#metric', 'quality');
-  assert.equal(await cells().nth(2).innerText(), 'Not scored');
+  assert.equal(await cells().nth(2).locator('.score-value').innerText(), qualityText(partial));
 
   // Raw measurement availability must not grant a verified rank or best-cell shading.
   await page.evaluate(() => {
@@ -113,5 +121,5 @@ try {
   assert.equal(await page.locator('#chart').innerText(), 'No measurements to plot.');
   assert.match(await page.locator('#view-note').innerText(), /No measurement means no point/);
   assert.deepEqual(errors, []);
-  console.log('Measurement visibility checks passed: real QFT, all four views, strict-score exclusion, partial/missing data, verified-only ranks/shading.');
+  console.log('Measurement visibility checks passed: real QFT, all four views, pass-rate scoring, partial/missing data, verified-only raw ranks/shading.');
 } finally { await browser.close(); }

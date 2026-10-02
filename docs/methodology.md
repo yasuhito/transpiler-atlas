@@ -103,6 +103,8 @@ Compare within the same tier and precision contract. Approximate synthesis has a
 
 ## Scores
 
+This future formal proposal retains verification as an admission condition. The current viewer instead offers a separately named exploratory score, `qcec-adjusted-v1`: performance × passed/required QCEC seed slots, with asterisks, tinted cells, and before-penalty details. See the [implemented pilot scoring rule](pilot.md#scores-and-ui-views). That penalty is a policy choice, not measured approximation error or a hardware success probability; it does not amend the proposed formal track below.
+
 Keep **Quality**, **Speed**, and **completion/validation** separate. Show a quality/time trade-off rather than presenting arbitrary weighting as an absolute winner.
 
 Freeze a reference implementation and version when the formal suite is released, provisionally Qiskit with a specified pipeline. A reference score of 100 is an anchor, not a claim of superiority. Do not track the latest Qiskit silently; changing reference requires a new score version. Resolve reference failures before finalizing a suite rather than removing inconvenient cases after measurement.
@@ -131,7 +133,7 @@ A future optional balanced view could use `sqrt(Quality × Speed)`, but should n
 
 - Formal scores require all predefined cases and seeds to finish and meet the required validation tier.
 - Keep unsupported, timeout, OOM, compiler error, invalid output, equivalence mismatch, and verification inconclusive distinct.
-- Missing or unverified required cases withhold verified scores, not a surviving-case average or an arbitrary penalty constant. The current viewer labels these Not scored and Not ranked.
+- In this proposed verified formal track, missing or unverified required cases withhold formal scores rather than using a surviving-case average. This differs from the separately versioned pass-rate-adjusted pilot scores.
 - Publish recorded raw measurements even when equivalence checks fail, with check results alongside them. Reserve N/A for unavailable raw measurements. Keep output-rule checks separate from equivalence; unverified raw values are not verified winners. Predefined Small/Medium/Large subsuites can score independently if complete.
 - Clearly label supplemental common-success-subset comparisons; they are not comparable to complete-suite or historical scores.
 - Publish median/IQR and repetition counts. Consider family-aware resampling for intervals, but do not claim significance from a handful of seeds or tiny differences. Declare rounding and practical-difference thresholds.

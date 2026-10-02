@@ -13,6 +13,8 @@
   --selected-text: #2755ad;
   --valid: #2d8169;
   --warning: #945c00;
+  --penalty-bg: #fff5e5;
+  --penalty-hover: #ffedce;
   --code-bg: #eef0f3;
   --pre-bg: #20232b;
   --pre-text: #eee;
@@ -36,6 +38,8 @@
   --selected-text: #a6c5ff;
   --valid: #75c9a8;
   --warning: #e5bc75;
+  --penalty-bg: #352a1c;
+  --penalty-hover: #443520;
   --code-bg: #232b38;
   --pre-bg: #0b0f15;
   --pre-text: #e5e9ef;

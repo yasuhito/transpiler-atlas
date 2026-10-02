@@ -27,6 +27,8 @@ try {
   const resolved = async theme => assert.equal(await page.locator('html').getAttribute('data-theme'), theme);
   assert.equal(await page.locator('#theme').inputValue(), 'system');
   await resolved('dark');
+  assert.equal(await page.locator('#result-rows tr[data-compiler="bqskit"] td').nth(2).evaluate(n => getComputedStyle(n).backgroundColor), 'rgb(53, 42, 28)');
+  assert.equal(await page.locator('a[href*="releases/"]').count(), 0);
   const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   await page.screenshot({ path: '/tmp/transpiler-atlas-dark.png', fullPage: true });
   await page.selectOption('#theme', 'light');
@@ -48,6 +50,7 @@ try {
   assert.equal(await page.locator('#theme').inputValue(), 'dark');
   await resolved('dark');
   assert.equal(await page.getByRole('link', { name: 'Design references', exact: true }).count(), 0);
+  assert.equal(await page.locator('a[href*="releases/"]').count(), 0);
   await page.screenshot({ path: '/tmp/transpiler-atlas-dark-docs.png', fullPage: true });
   await page.selectOption('#theme', 'system');
   await resolved('light');
