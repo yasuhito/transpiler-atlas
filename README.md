@@ -48,18 +48,19 @@ Open `http://localhost:8765/`. Deploy the site tree together with `web/`, `docs/
 
 ## Implemented pilot
 
-Pilot v0.3: 12 circuits × 2 topologies × 3 compilers × 3 seed slots, with three repetitions each: 216 scheduled entries and up to 648 output checks. All 216 entries completed; 597/648 outputs passed strict validation. BQSKit had 17 verification-failed line-target entries; all 36 of its all-to-all entries passed. BQSKit outputs that fail the unchanged strict QCEC check remain unverified and receive N/A, rather than having the verifier relaxed.
+Pilot v0.3: 12 circuits × 2 topologies × 3 compilers × 3 seed slots, with three repetitions each: 216 scheduled entries and up to 648 output checks. All 216 entries completed; 597/648 outputs passed strict validation. BQSKit had 17 verification-failed line-target entries; all 36 of its all-to-all entries passed. BQSKit outputs that fail the unchanged strict QCEC check remain unverified, but their gate counts, depths, and times are displayed. Verified scores are withheld (Not scored); raw measurements are not hidden and the verifier is not relaxed.
 
 - Six families: QFT, QAOA, Adder, Grover, VQE, Hamiltonian. Six original generated circuits plus six fixed QASMBench imports.
 - [Corpus sources and license review](docs/corpora.md); original QASM, license, parameters, and source/input hashes are retained. Expand Input details in the per-circuit view.
 - [Pilot v0.1](releases/pilot-v0.1/index.html) and [Pilot v0.2](releases/pilot-v0.2/index.html) retain their original reports, measurements, artifacts, sources, and dependency locks.
 - [BQSKit adapter](docs/bqskit.md): standard level 1, two-qubit blocks, synthesis epsilon `1e-12`, seeded, one local worker/BLAS thread, returned wire maps, unchanged QCEC acceptance.
-- Targets: input-width all-to-all and line, bidirectional CX.
+- Targets: Atlas-designed synthetic input-width all-to-all and line, bidirectional CX. These are not named hardware devices, corpus requirements, or adopted standard specifications.
 - Native basis: `rz,sx,x,cx`.
 - Shared host, single-core affinity; not an exclusive controlled machine.
 - Frozen low-level OpenQASM 2 inputs lowered by Qiskit level 0; not a high-level-neutral input track. Corpus barriers and per-wire terminal readout are removed; preparation gates remain.
 - pytket does not use the seed in this pipeline. Its seed slots represent repeated measurements.
-- Quality and Speed use the same measured Qiskit reference = 100. Missing required trials yield N/A.
+- Quality and Speed use the same measured Qiskit reference = 100. Missing or unverified required trials withhold verified scores and ranks, not raw metrics. N/A means no measurement was recorded.
+- Output rules (gates, connections, width) and strict equivalence checks are displayed separately. All measured outputs appear in the plot: filled for fully verified, hollow otherwise. Partial raw medians are labeled.
 
 See [pilot protocol](docs/pilot.md) / [HTML](docs/pilot.html) for precision, maps, timing boundaries, and limitations.
 

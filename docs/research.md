@@ -26,7 +26,7 @@ The research did not confirm a separate independent platform combining continuou
 
 ## Compiler candidates
 
-Priority is a proposed scope. The implemented pilot measures only Qiskit and pytket.
+Priority is a proposed scope. The current pilot measures Qiskit, pytket, and BQSKit; its explicit pipelines and limitations are in the [pilot protocol](pilot.md).
 
 | Priority | Compiler / organization | Explicit comparison pipeline | Caveats and primary source |
 | --- | --- | --- | --- |

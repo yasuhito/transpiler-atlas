@@ -36,6 +36,8 @@ Proposed suite v1 synthetic targets:
 | line-32-cx | 32 | Path, bidirectional CX | rz, sx, x, cx |
 | grid-4x8-cx | 32 | 4 × 8 grid, bidirectional CX | rz, sx, x, cx |
 
+These target definitions are Atlas design choices, not imported corpus conditions, a named hardware specification, or a claim of conformance to an existing benchmark standard. The current pilot uses input-width variants rather than these proposed 32-qubit targets.
+
 Produce separate tables/scores per target. Fully connected targets emphasize optimization; lines emphasize routing; grids provide another interaction structure. Do not combine different physical constraints into an unexplained single ranking.
 
 Persist physical IDs, edges, directionality, parameter domains, and gate definitions. Check each adapter's native output capability before including it. A competitor that cannot reach a target must not be silently assisted by another competitor's optimizer.
@@ -129,8 +131,8 @@ A future optional balanced view could use `sqrt(Quality × Speed)`, but should n
 
 - Formal scores require all predefined cases and seeds to finish and meet the required validation tier.
 - Keep unsupported, timeout, OOM, compiler error, invalid output, equivalence mismatch, and verification inconclusive distinct.
-- Missing any required case yields N/A/incomplete, not a surviving-case average or an arbitrary penalty constant.
-- Publish raw successful cases. Predefined Small/Medium/Large subsuites can score independently if complete.
+- Missing or unverified required cases withhold verified scores, not a surviving-case average or an arbitrary penalty constant. The current viewer labels these Not scored and Not ranked.
+- Publish recorded raw measurements even when equivalence checks fail, with check results alongside them. Reserve N/A for unavailable raw measurements. Keep output-rule checks separate from equivalence; unverified raw values are not verified winners. Predefined Small/Medium/Large subsuites can score independently if complete.
 - Clearly label supplemental common-success-subset comparisons; they are not comparable to complete-suite or historical scores.
 - Publish median/IQR and repetition counts. Consider family-aware resampling for intervals, but do not claim significance from a handful of seeds or tiny differences. Declare rounding and practical-difference thresholds.
 

@@ -73,6 +73,7 @@
 </tr>
 </tbody>
 </table></div>
+<p>These target definitions are Atlas design choices, not imported corpus conditions, a named hardware specification, or a claim of conformance to an existing benchmark standard. The current pilot uses input-width variants rather than these proposed 32-qubit targets.</p>
 <p>Produce separate tables/scores per target. Fully connected targets emphasize optimization; lines emphasize routing; grids provide another interaction structure. Do not combine different physical constraints into an unexplained single ranking.</p>
 <p>Persist physical IDs, edges, directionality, parameter domains, and gate definitions. Check each adapter's native output capability before including it. A competitor that cannot reach a target must not be silently assisted by another competitor's optimizer.</p>
 <p>CZ, ECR, RXX, and other native entanglers define separate target tracks. One instance of each gate is not assumed to have equal cost. Noise, durations, pulses, and schedules are excluded initially. Noise-aware tracks require identical frozen calibration snapshots.</p>
@@ -178,8 +179,8 @@ Speed   = 100 × exp(mean_f(ln(s_f)))
 <ul>
 <li>Formal scores require all predefined cases and seeds to finish and meet the required validation tier.</li>
 <li>Keep unsupported, timeout, OOM, compiler error, invalid output, equivalence mismatch, and verification inconclusive distinct.</li>
-<li>Missing any required case yields N/A/incomplete, not a surviving-case average or an arbitrary penalty constant.</li>
-<li>Publish raw successful cases. Predefined Small/Medium/Large subsuites can score independently if complete.</li>
+<li>Missing or unverified required cases withhold verified scores, not a surviving-case average or an arbitrary penalty constant. The current viewer labels these Not scored and Not ranked.</li>
+<li>Publish recorded raw measurements even when equivalence checks fail, with check results alongside them. Reserve N/A for unavailable raw measurements. Keep output-rule checks separate from equivalence; unverified raw values are not verified winners. Predefined Small/Medium/Large subsuites can score independently if complete.</li>
 <li>Clearly label supplemental common-success-subset comparisons; they are not comparable to complete-suite or historical scores.</li>
 <li>Publish median/IQR and repetition counts. Consider family-aware resampling for intervals, but do not claim significance from a handful of seeds or tiny differences. Declare rounding and practical-difference thresholds.</li>
 </ul>

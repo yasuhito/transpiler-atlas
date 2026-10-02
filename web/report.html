@@ -47,6 +47,7 @@
         <div class="control-actions"><button id="reset" class="text-button">Reset</button><a id="permalink" href="#">Permalink ↗</a></div>
       </div>
       <div class="category-row"><span class="control-label">Circuit</span><div class="categories" role="group" aria-label="Circuit family"><button data-family="all" aria-pressed="true">All</button><button data-family="QFT" aria-pressed="false">QFT</button><button data-family="QAOA" aria-pressed="false">QAOA</button><button data-family="Adder" aria-pressed="false">Adder</button></div><label class="column-toggle"><input id="columns" type="checkbox" checked>Detailed columns</label></div>
+      <p id="target-note" class="target-note"></p>
     </section>
 
     <section id="result-panel" role="tabpanel" aria-labelledby="tab-leaderboard" tabindex="0">
@@ -54,13 +55,13 @@
       <div id="table-container" class="table-scroll" role="region" aria-label="Benchmark table" tabindex="0"><table id="results-table"><caption class="sr-only">Compiler benchmark results for the selected filters</caption><thead id="result-head"></thead><tbody id="result-rows"></tbody></table></div>
       <div id="plot-container" hidden>
         <div class="plot-tools"><div class="field"><label for="plot-y">Vertical axis</label><select id="plot-y"><option value="count">2Q gate count</option><option value="depth">2Q depth</option></select></div><div class="legend"><span><i class="dot qiskit"></i>Qiskit</span><span><i class="dot pytket"></i>pytket</span></div></div>
-        <div id="chart"></div><p class="plot-note">Lower left is better. Compile time uses a logarithmic axis. Dotted lines pair the same circuit across compilers.</p>
+        <div id="chart"></div><p class="plot-note">Lower left is better. Compile time uses a logarithmic axis. Dotted lines pair the same circuit across compilers. Filled points: all QCEC checks passed. Hollow points: unverified or partial measurements.</p>
       </div>
       <p id="view-note" class="view-note"></p>
       <div id="empty" class="empty" hidden>No measured circuits match these filters. <button id="empty-reset" class="text-button">Reset filters</button></div>
     </section>
 
-    <details id="environment" class="run-details"><summary>Run configuration and interpretation</summary><div class="details-grid"><div><h2>Measurement</h2><dl id="environment-fields"></dl></div><div><h2>Interpretation</h2><ul><li>Quality combines 2Q count and 2Q depth. Scores use equal family weights and the same run's Qiskit baseline of 100.</li><li>Speed uses a 1 ms floor. A score is shown only when every required trial passes validation.</li><li>pytket does not accept the seed in this pipeline. Its three seed slots are repeated measurements, not independent seeded configurations.</li><li>Timing includes pipeline construction and compilation. Parsing, export, conversion for validation, QCEC, and BQSKit local runtime startup/shutdown are excluded.</li><li>No enforced memory cap, exclusive host, or CPU frequency control. A first-use cost can enter the first of three timing repetitions.</li></ul><a href="docs/pilot.html">Full pilot protocol ↗</a></div></div></details>
+    <details id="environment" class="run-details"><summary>Run configuration and interpretation</summary><div class="details-grid"><div><h2>Measurement</h2><dl id="environment-fields"></dl></div><div><h2>Interpretation</h2><ul><li>Quality combines 2Q count and 2Q depth. Scores use equal family weights and the same run's Qiskit baseline of 100.</li><li>Speed uses a 1 ms floor. Scores and ranks require every selected trial to pass strict equivalence checks. Raw measurements remain visible even when checks fail; N/A means no measurement was recorded.</li><li>pytket does not accept the seed in this pipeline. Its three seed slots are repeated measurements, not independent seeded configurations.</li><li>Timing includes pipeline construction and compilation. Parsing, export, conversion for validation, QCEC, and BQSKit local runtime startup/shutdown are excluded.</li><li>No enforced memory cap, exclusive host, or CPU frequency control. A first-use cost can enter the first of three timing repetitions.</li></ul><a href="docs/pilot.html">Full pilot protocol ↗</a></div></div></details>
     <footer><span id="footer-meta"></span><div><a href="data/manifest.json">Input manifest</a><a href="data/results.json">Raw JSON</a><a href="releases/pilot-v0.2/index.html">Pilot v0.2</a><a href="releases/pilot-v0.1/index.html">Pilot v0.1</a></div></footer>
     <noscript><p>JavaScript is required for interactive results. <a href="data/results.json">Download the raw data</a>.</p></noscript>
   </main>

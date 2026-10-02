@@ -13,7 +13,7 @@ const complete = (c, target, compiler) => {
   const rows = raw.results.filter(r => r.target === target && r.case_id === c.id && r.compiler === compiler);
   return rows.length === raw.protocol.seeds.length && rows.every(r => r.status === 'passed');
 };
-const plotted = (target, family = 'all', width = 'all') => raw.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width)).reduce((n, c) => n + compilers.filter(compiler => complete(c, target, compiler)).length, 0);
+const plotted = (target, family = 'all', width = 'all') => raw.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width)).reduce((n, c) => n + compilers.filter(compiler => raw.results.some(r => r.target === target && r.case_id === c.id && r.compiler === compiler && Number.isFinite(r.compile_ms) && Number.isFinite(r.metrics?.two_qubit_count))).length, 0);
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
   headless: true,
@@ -48,6 +48,8 @@ try {
   assert.equal(japanese.test(await page.locator('body').innerText()), false);
   assert.equal(await page.locator('h1').innerText(), 'Benchmark results');
   assert.equal(await page.locator('#result-rows tr').count(), nc);
+  assert.equal(await page.locator('#table-container').evaluate(n => n.scrollWidth <= n.clientWidth), true, 'Desktop leaderboard must fit all columns');
+  assert.match(await page.locator('#target-note').innerText(), /Atlas-designed synthetic target/);
   const trials = raw.results.flatMap(r => r.trials ?? []);
   const accepted = trials.filter(t => t.validation.accepted).length;
   assert.ok((await page.locator('#dataset-meta').innerText()).includes(`${accepted}/${trials.length}`));
@@ -59,13 +61,14 @@ try {
 
   for (const target of ['line', 'all-to-all']) {
     await page.selectOption('#target', target);
+    assert.match(await page.locator('#target-note').innerText(), target === 'line' ? /neighboring qubits/ : /any pair/);
     for (const family of [...new Set(raw.cases.map(c => c.family))]) {
       const n = raw.cases.filter(c => c.family === family).length;
       await page.locator(`[data-family="${family}"]`).click();
       assert.equal(await qualityCell('qiskit').innerText(), '100.0');
       for (const compiler of compilers) {
         const expected = expectedQuality(target, family, 'all', compiler);
-        assert.equal(await qualityCell(compiler).innerText(), Number.isNaN(expected) ? 'N/A' : expected.toFixed(1));
+        assert.equal(await qualityCell(compiler).innerText(), Number.isNaN(expected) ? 'Not scored' : expected.toFixed(1));
       }
       assert.ok((await page.locator('#selection-status').innerText()).includes(`${n} circuits`));
       await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
@@ -100,12 +103,12 @@ try {
     await page.selectOption('#compiler', 'bqskit');
     assert.equal(await page.locator('#result-rows tr').count(), 1);
     const expected = expectedQuality('line', 'all', 'all', 'bqskit');
-    assert.equal(await qualityCell('bqskit').innerText(), Number.isNaN(expected) ? 'N/A' : expected.toFixed(1));
+    assert.equal(await qualityCell('bqskit').innerText(), Number.isNaN(expected) ? 'Not scored' : expected.toFixed(1));
     const permalink = await page.locator('#permalink').getAttribute('href');
     await page.goto(permalink);
     assert.equal(await page.locator('#compiler').inputValue(), 'bqskit');
     await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
-    const failed = page.locator('#result-rows tr').filter({ hasText: 'Incomplete / unverified' }).first();
+    const failed = page.locator('#result-rows tr').filter({ hasText: 'Strict check failed' }).first();
     await failed.getByText('Validation details', { exact: true }).click();
     assert.match(await failed.innerText(), /verification_failed/);
     assert.match(await failed.innerText(), /not_equivalent/);
@@ -220,7 +223,7 @@ try {
     data.results.find(r => r.target === 'line' && r.family === 'QAOA' && r.compiler === 'pytket').status = 'timeout';
     state.view = 'leaderboard'; state.metric = 'quality'; render();
   });
-  assert.equal(await qualityCell('pytket').innerText(), 'N/A');
+  assert.equal(await qualityCell('pytket').innerText(), 'Not scored');
   await page.getByRole('tab', { name: 'Per circuit', exact: true }).click();
   assert.match(await page.locator('#result-rows').innerText(), /Incomplete/);
   assert.deepEqual(errors, []);

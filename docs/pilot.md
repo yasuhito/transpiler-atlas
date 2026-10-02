@@ -52,7 +52,7 @@ The runner refuses a suite change without a matching archived results file. Repe
 
 ## Target and pipelines
 
-The physical width equals the input's total width. Targets are fully connected or linear, with bidirectional CX, the native basis `rz,sx,x,cx`, and no added workspace. This differs from the proposed 32-physical-qubit suite v1 targets.
+The physical width equals the input's total width. Targets are fully connected or linear, with bidirectional CX, the native basis `rz,sx,x,cx`, and no added workspace. These are Atlas-designed synthetic test conditions, not a named hardware device, a QASMBench requirement, or an adopted standard benchmark specification. All-to-all isolates compilation without connectivity restrictions; a line exercises placement and routing when only neighboring wires can interact. The source of this choice is the Atlas methodology proposal, not the input corpus. This differs from the proposed 32-physical-qubit suite v1 targets.
 
 - **Qiskit:** preset level 2, `approximation_degree=1.0`, seeds 7/19/43.
 - **pytket:** `FullPeepholeOptimise(allow_swaps=False)` → `DefaultMappingPass` using GraphPlacement → `SynthesiseTket` → `AutoRebase(rz,sx,x,cx,allow_swaps=False)`.
@@ -62,7 +62,7 @@ The pytket pipeline is explicit and specific to this experiment, not a claim abo
 
 ## Timing and environment
 
-12 circuits in six families × 2 targets × 3 compilers × 3 seed slots = 216 scheduled entries, each with three compilation repetitions (648 potential output checks). All 216 entries completed without timeout or worker error. Of 648 recorded outputs, 597 passed the strict check; the other 51 are from 17 BQSKit line-target entries. Qiskit and pytket each passed all 72 entries; BQSKit passed 55 of 72. BQSKit verification failures remain in the data and yield N/A, not a surviving-case score. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
+12 circuits in six families × 2 targets × 3 compilers × 3 seed slots = 216 scheduled entries, each with three compilation repetitions (648 potential output checks). All 216 entries completed without timeout or worker error. Of 648 recorded outputs, 597 passed the strict check; the other 51 are from 17 BQSKit line-target entries. Qiskit and pytket each passed all 72 entries; BQSKit passed 55 of 72. BQSKit verification failures retain their raw measurements in every UI view. Their verified scores are labeled Not scored, not a surviving-case score. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
 
 The machine is shared. The runner pins affinity to the first permitted CPU and sets thread environment variables to one. CPU frequency, sibling hardware threads, and other jobs are not controlled. It is not an exclusive-machine measurement. Full metadata is in [results.json](../data/results.json).
 
@@ -70,11 +70,11 @@ Timing includes pipeline construction and compilation. SDK import, parsing, expo
 
 Each entry runs in a new worker, with its three repetitions in the same process. A 120-second worker timeout includes all repetitions and checking. It is not a 60-second limit on one compilation. No memory cap is enforced. Timed-out workers and their local runtime descendants are terminated as one process group. Worker order is shuffled with a fixed seed.
 
-The UI reports the median of the three timing repetitions within each seed slot, then the median across the three slots. Gate counts and depths use the same two-stage aggregation. Every repetition is retained in the raw data. Timing tooltips in the per-circuit view show the range of all nine samples.
+The UI reports the median of the three timing repetitions within each seed slot, then the median across available measured slots, including slots whose strict equivalence check failed. Gate counts and depths use the same two-stage aggregation. Missing measurements are omitted rather than filled with zero or invented. Partial coverage is explicitly labeled; a median over two available slots is not a complete three-slot comparison. Every repetition is retained in the raw data. Timing tooltips show the recorded sample range.
 
 ## Output validation
 
-Every output is checked against a shared definition of the gate set, directed coupling edges, and gate arity. Counts are taken from the final native output without reoptimization.
+Every recorded output is checked against a shared definition of the gate set, directed coupling edges, and gate arity. Maps enforce equal input/output width with no added workspace. Counts are taken from the final native output without reoptimization. The per-circuit view separates these output rules from QCEC equivalence. A verification-failed entry still passed output rules in this runner; a failed strict equivalence check is not a violation of the line topology.
 
 2Q depth is the longest weighted path through the full qubit-dependency DAG: 2Q gates have weight one and 1Q gates have weight zero. Total depth gives every gate weight one. SDK-specific moment counts are not compared directly.
 
@@ -97,11 +97,11 @@ Speed   = 100 × max(T_ref, 1 ms)/max(T, 1 ms)
 
 G is the median 2Q count, D the median 2Q depth, and T the nested median compile time. Within each family, ratios are combined by geometric mean. Families then receive equal weight in a geometric mean. `+1` is disclosed smoothing for zero counts, not a physical cost model.
 
-- **Leaderboard:** compiler-level family-balanced Quality/Speed, plus medians of raw count, depth, and time across selected circuits. Raw medians are not normalized or family-balanced scores. Detailed columns show each family's Quality score.
-- **Per circuit:** compiler/circuit medians, optional individual circuit scores, timing ranges, validation, and output links.
-- **Matrix:** one circuit per row and compiler per column; the selected metric is shown directly. Shading marks the best available value, including ties, not statistical significance.
-- **Trade-off:** per-circuit compile time against 2Q count or depth. Only completed, validated entries are plotted.
+- **Leaderboard:** verified, family-balanced Quality/Speed plus raw count, depth, and time medians across measured circuits, including unverified outputs. Raw medians are not normalized or family-balanced scores. Coverage separates measured circuits from fully QCEC-passed circuits; unverified and partial measurements are labeled. Unverified selections are not ranked, even when sorted by a raw metric. Detailed columns show each family's verified Quality score.
+- **Per circuit:** raw medians, optional verified scores, timing ranges, separate output-rule and equivalence results, measurement/verification slot coverage, and output links.
+- **Matrix:** raw values remain visible for unverified outputs, labeled even when detailed columns are off. Shading marks the best fully verified value in each row, including ties, not statistical significance.
+- **Trade-off:** every available raw compile-time/count or depth pair is plotted. Filled points passed all required checks; hollow points are unverified or partial. Tooltips and accessible descriptions retain check and measurement coverage. The plot is not a verified ranking.
 
-Any missing required seed slot or failed validation makes the score N/A for that selection. Compiler filtering does not remove the Qiskit reference from calculation. Filters can change the selected set and therefore the scores; values from different sets are not directly comparable. URL fragments preserve view/filter state.
+Any missing required seed slot or failed equivalence check withholds the verified score, displayed as Not scored; its rank is Not ranked. Raw measurements remain visible. N/A is reserved for a raw metric with no recorded measurement. No relaxed tolerance, approximate track, or silent successful-subset score is introduced by this display change. The v0.3 measurement bytes, input hashes, acceptance criteria, and score formulas are unchanged. Compiler filtering does not remove the Qiskit reference from calculation. Filters can change the selected set and therefore the scores; values from different sets are not directly comparable. URL fragments preserve view/filter state.
 
 The small suite does not establish general SDK superiority, quantum hardware success probability, or performance on unmeasured algorithms such as Shor.
