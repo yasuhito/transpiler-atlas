@@ -24,10 +24,13 @@ const defaults = { view: 'leaderboard', target: 'line', family: 'all', width: 'a
 const state = { ...defaults };
 const enums = {
   view: ['leaderboard', 'circuits', 'matrix', 'tradeoff'],
-  target: ['line', 'all-to-all'], family: ['all', 'QFT', 'QAOA', 'Adder'],
-  width: ['all', '4', '6', '8'], compiler: ['all', 'qiskit', 'pytket'],
+  target: ['line', 'all-to-all'], family: ['all', ...new Set(data.cases.map(c => c.family))],
+  width: ['all', ...new Set(data.cases.map(c => String(c.qubits)))], compiler: ['all', 'qiskit', 'pytket'],
   metric: Object.keys(metrics), columns: ['on', 'off'], y: ['count', 'depth'],
 };
+
+$('width').innerHTML = '<option value="all">All widths</option>' + [...new Set(data.cases.map(c => c.qubits))].sort((a, b) => a - b).map(n => `<option value="${n}">${n} qubits</option>`).join('');
+document.querySelector('.categories').innerHTML = enums.family.map(f => `<button data-family="${esc(f)}" aria-pressed="${f === 'all'}">${f === 'all' ? 'All' : esc(f)}</button>`).join('');
 
 function readHash() {
   const params = new URLSearchParams(location.hash.slice(1));
@@ -138,13 +141,19 @@ function renderLeaderboard(items, compilers) {
   }).join('');
   $('view-note').innerHTML = 'Quality and Speed are exploratory, family-balanced scores relative to Qiskit = 100. Raw 2Q count, depth, and time columns are medians across selected circuits, not normalized scores. Missing required trials produce N/A. <a href="docs/pilot.html">Definitions ↗</a>';
 }
+function inputDetails(id) {
+  const circuit = data.cases.find(c => c.id === id);
+  const p = circuit.provenance;
+  const source = p ? `<a href="${esc(p.url)}">${esc(p.corpus)} source ↗</a> · <a href="${esc(p.source_path)}">Original QASM</a> · <a href="${esc(p.license_path)}">License</a>` : 'Atlas-generated input';
+  return `<details class="input-details"><summary>Input details</summary>${source}<div class="mono">${esc(JSON.stringify(circuit.parameters))}</div><div>${esc(p?.transformation ?? 'Qiskit level-0 lowering')}</div><div class="mono">SHA-256: ${esc(circuit.sha256)}</div></details>`;
+}
 function renderCircuits(items) {
   const detailed = state.columns === 'on';
   const scoreColumn = ['quality', 'speed'].includes(state.metric);
   $('result-head').innerHTML = `<tr><th scope="col">Circuit</th><th scope="col">Compiler</th>${scoreColumn ? heading(state.metric) : ''}${heading('count')}${heading('depth')}${heading('time')}${detailed ? '<th class="num" scope="col">1Q count</th><th class="num" scope="col">Total depth</th>' : ''}<th scope="col">Validation / artifact</th></tr>`;
   $('result-rows').innerHTML = [...items].sort(compare).map(row => {
     const artifact = row.rows[0]?.trials?.[0]?.artifact;
-    return `<tr data-compiler="${row.compiler}"><td><strong class="mono">${esc(row.id)}</strong><span class="sub" style="margin-left:0">${esc(row.family)} · ${row.qubits} qubits</span></td><td>${nameCell(row.compiler, detailed)}</td>${scoreColumn ? numberCell(row, state.metric) : ''}${['count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? numberCell(row, 'one') + numberCell(row, 'total') : ''}<td><span class="${row.complete ? 'valid' : 'artifact'}">${row.complete ? 'QCEC passed' : 'Incomplete / unverified'}</span>${artifact ? ' · <a class="artifact" href="' + esc(artifact) + '">QASM ↗</a>' : ''}</td></tr>`;
+    return `<tr data-compiler="${row.compiler}"><td><strong class="mono">${esc(row.id)}</strong><span class="sub" style="margin-left:0">${esc(row.family)} · ${row.qubits} qubits</span>${inputDetails(row.id)}</td><td>${nameCell(row.compiler, detailed)}</td>${scoreColumn ? numberCell(row, state.metric) : ''}${['count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? numberCell(row, 'one') + numberCell(row, 'total') : ''}<td><span class="${row.complete ? 'valid' : 'artifact'}">${row.complete ? 'QCEC passed' : 'Incomplete / unverified'}</span>${artifact ? ' · <a class="artifact" href="' + esc(artifact) + '">QASM ↗</a>' : ''}</td></tr>`;
   }).join('');
   $('view-note').textContent = 'Each value is the median across three seed slots; each slot has three timing repetitions. Hover over time for the nine-sample range. The QASM link opens the first output trial. Per-circuit scores use that circuit’s Qiskit reference.';
 }

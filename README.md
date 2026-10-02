@@ -28,7 +28,7 @@ The UI was revised after inspecting SWE-bench, DeepSWE, LiveBench, and Artificia
 ```bash
 # Linux, Python 3.12; dependencies pinned in uv.lock
 uv sync --frozen
-uv run python atlas.py run
+uv run python atlas.py run --overwrite
 uv run python build_site.py
 
 uv run pytest -q
@@ -48,13 +48,15 @@ Open `http://localhost:8765/`. Deploy the site tree together with `web/`, `docs/
 
 ## Implemented pilot
 
-6 circuits × 2 topologies × 2 compilers × 3 seed slots, with three repetitions each: 72 entries and 216 output checks. All recorded outputs passed QCEC's decision-diagram equivalence check.
+Pilot v0.2: 12 circuits × 2 topologies × 2 compilers × 3 seed slots, with three repetitions each: 144 entries and 432 output checks. All recorded outputs passed QCEC's decision-diagram equivalence check.
 
-- Families: QFT, QAOA, full ripple-carry adder.
+- Six families: QFT, QAOA, Adder, Grover, VQE, Hamiltonian. Six original generated circuits plus six fixed QASMBench imports.
+- [Corpus sources and license review](docs/corpora.md); original QASM, license, parameters, and source/input hashes are retained. Expand Input details in the per-circuit view.
+- [Pilot v0.1 archive](releases/pilot-v0.1/index.html) keeps its original report, measurements, artifacts, sources, and dependency lock.
 - Targets: input-width all-to-all and line, bidirectional CX.
 - Native basis: `rz,sx,x,cx`.
 - Shared host, single-core affinity; not an exclusive controlled machine.
-- Frozen low-level OpenQASM 2 inputs generated/lowered by Qiskit level 0; not a high-level-neutral input track.
+- Frozen low-level OpenQASM 2 inputs lowered by Qiskit level 0; not a high-level-neutral input track. Corpus barriers and per-wire terminal readout are removed; preparation gates remain.
 - pytket does not use the seed in this pipeline. Its seed slots represent repeated measurements.
 - Quality and Speed use the same measured Qiskit reference = 100. Missing required trials yield N/A.
 
@@ -69,11 +71,13 @@ See [pilot protocol](docs/pilot.md) / [HTML](docs/pilot.html) for precision, map
 - [Landscape and candidates](docs/research.md) / [HTML](docs/research.html).
 - [Formal methodology proposal](docs/methodology.md) / [HTML](docs/methodology.html).
 
-`index.html`, `docs/*.html`, and `data/*` are generated artifacts. Do not hand-edit them.
+`index.html`, `docs/*.html`, and `data/*` are generated artifacts. Do not hand-edit them. `corpora/` contains unmodified licensed upstream inputs. `releases/pilot-v0.1/` is an immutable copy of the published pilot; do not regenerate it with current sources.
+
+`atlas.py run` refuses to replace current-suite measurements without `--overwrite`, and refuses a suite change without a matching archived results file. Preserve any measurements you need before explicitly overwriting them. Tests generate their inputs in temporary directories.
 
 ## Planned scope
 
-Add Cirq/BQSKit, Grover/VQE/Hamiltonian circuits, and fixed grid/large targets after validating adapters. Shor, specialized mapping, fault-tolerant, cloud, and dynamic-circuit tracks remain separate proposals. No unmeasured compilers appear as fabricated leaderboard entries.
+Add BQSKit next on the same inputs, then Cirq after choosing an explicit pipeline. Broaden widths, parameter sets, and fixed grid/large targets after validating adapters. Shor, specialized mapping, fault-tolerant, cloud, and dynamic-circuit tracks remain separate proposals. No unmeasured compilers appear as fabricated leaderboard entries.
 
 Compiler benchmarking already exists in Benchpress, ucc-bench, Arline, and others. This project aims at reproducible conditional results presentation, not a claim to be the first comparison.
 

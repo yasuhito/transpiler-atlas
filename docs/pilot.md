@@ -1,4 +1,4 @@
-# Pilot v0.1: protocol and limitations
+# Pilot v0.2: protocol and limitations
 
 This is an end-to-end feasibility experiment, not the formal suite v1 proposed in the methodology. It tests compilation, output constraints, and equivalence with input/output wire maps taken into account.
 
@@ -6,7 +6,7 @@ This is an end-to-end feasibility experiment, not the formal suite v1 proposed i
 
 ```bash
 uv sync --frozen
-uv run python atlas.py run
+uv run python atlas.py run --overwrite
 uv run python build_site.py
 uv run pytest -q
 uv run ruff check .
@@ -31,12 +31,24 @@ Then open `http://localhost:8765/`. Results and HTML are generated artifacts and
 | QFT | 4 and 6 qubits | Exact QFT including final bit reversal |
 | QAOA | 4 and 6 qubits | MaxCut-style ring graph with one chord, p=2, fixed nontrivial angles |
 | Adder | 6 and 8 total qubits | CDKM full ripple-carry adder with 2/3-bit registers and carry-in/out |
+| QFT (QASMBench) | 4 qubits | `qft_n4`, including its preparation gates, no added reversal |
+| QAOA (QASMBench) | 3 qubits | `qaoa_n3`, fixed p=1 cost-function instance and angles |
+| Adder (QASMBench) | 4 qubits | `adder_n4`, published fixed circuit including preparation |
+| Grover (QASMBench) | 2 qubits | `grover_n2`, published fixed oracle/diffusion circuit |
+| VQE (QASMBench) | 4 qubits | `vqe_n4`, published fixed ansatz angles, no energy/optimizer evaluation |
+| Hamiltonian (QASMBench) | 10 qubits | `ising_n10`, published fixed Ising circuit |
 
-All inputs are generated with Qiskit and lowered, without optimization or topology constraints, to `h,x,rx,ry,rz,cx` using level 0. Both compilers receive the same frozen OpenQASM 2 input.
+The six original inputs are generated with Qiskit; six additional inputs are imported from QASMBench. All are lowered, without optimization or topology constraints, to `h,x,rx,ry,rz,cx` using level 0. Both compilers receive the same frozen OpenQASM 2 input.
 
 This is a **common low-level input track**, not a generator-independent high-level comparison. The chosen generator and lowering rules can influence results and remove useful algorithmic structure. No claim is made that this input track evaluates every compiler's high-level capabilities fairly.
 
-[manifest.json](../data/manifest.json) records the input SHA-256 hashes, parameters, and widths. Circuit construction uses public Qiskit APIs and explicitly described algorithms; existing benchmark source code was not copied. The unitary checker checks the whole input circuit, including the adder's carry wires, rather than testing only a chosen basis input.
+[manifest.json](../data/manifest.json) records the input SHA-256 hashes, parameters, and widths. The original six circuits use public Qiskit APIs and explicitly described algorithms. The new six are redistributed QASMBench files with their upstream license retained. [Corpus provenance and license review](corpora.md) describes the fixed revision, transformations, and limits. Original files, upstream URLs, source hashes, removed-instruction counts, and lowered-input hashes are recorded for each imported case. The unitary checker checks the whole input circuit, including the adder's carry wires, rather than testing only a chosen basis input.
+
+## Release preservation
+
+[The Pilot v0.1 archive](../releases/pilot-v0.1/index.html) preserves its original report, raw data, artifacts, documentation, runner, and dependency lock. Current results are a new measurement of all 12 cases, not a merge of old and new timings. Cross-release absolute timing comparisons are not controlled comparisons.
+
+The runner refuses a suite change without a matching archived results file. Repeating v0.2 requires `--overwrite`; preserve another snapshot first if the rerun must remain available. Tests generate inputs in temporary directories rather than changing published inputs.
 
 ## Target and pipelines
 
@@ -49,7 +61,7 @@ The pytket pipeline is explicit and specific to this experiment, not a claim abo
 
 ## Timing and environment
 
-6 circuits × 2 targets × 2 compilers × 3 seed slots = 72 entries. Each entry has three compilation repetitions; all 216 outputs are validated.
+12 circuits in six families × 2 targets × 2 compilers × 3 seed slots = 144 entries. Each entry has three compilation repetitions; all 432 recorded outputs passed validation. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
 
 The machine is shared. The runner pins affinity to the first permitted CPU and sets thread environment variables to one. CPU frequency, sibling hardware threads, and other jobs are not controlled. It is not an exclusive-machine measurement. Full metadata is in [results.json](../data/results.json).
 

@@ -21,6 +21,16 @@ ROOT = Path(__file__).resolve().parent
 BASIS = {"rz", "sx", "x", "cx"}
 SEEDS = [7, 19, 43]
 REPEATS = 3
+SUITE = "pilot-v0.2"
+QASMBENCH_REVISION = "357b942396d5c2b7cbc1c229c585a6ef5ccaebac"
+CORPUS_CASES = {
+    "qft_n4": "QFT",
+    "qaoa_n3": "QAOA",
+    "adder_n4": "Adder",
+    "grover_n2": "Grover",
+    "vqe_n4": "VQE",
+    "ising_n10": "Hamiltonian",
+}
 
 
 def edges_for(n: int, target: str) -> list[tuple[int, int]]:
@@ -106,6 +116,31 @@ def check_equivalence(original, native, initial: list[int], final: list[int]) ->
     return {"accepted": accepted, "criterion": result.equivalence.name, "details": details}
 
 
+def corpus_unitary(path: Path):
+    """Keep preparation/gates; remove barriers and per-wire terminal readout only."""
+    from qiskit import QuantumCircuit, qasm2
+
+    source = qasm2.load(path, custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
+    unitary = QuantumCircuit(*source.qregs)
+    measured = set()
+    removed = {"measure": 0, "barrier": 0}
+    for item in source.data:
+        name = item.operation.name
+        if name == "barrier":
+            removed[name] += 1
+            continue
+        if name == "measure":
+            measured.update(item.qubits)
+            removed[name] += 1
+            continue
+        if item.clbits or name == "reset" or getattr(item.operation, "condition", None):
+            raise ValueError("Dynamic/nonunitary corpus input is unsupported")
+        if measured.intersection(item.qubits):
+            raise ValueError("Measurement is not terminal on its wire")
+        unitary.append(item.operation, item.qubits)
+    return unitary, removed
+
+
 def generate_inputs() -> list[dict]:
     from qiskit import QuantumCircuit, qasm2, transpile
     from qiskit.circuit.library import CDKMRippleCarryAdder
@@ -159,6 +194,37 @@ def generate_inputs() -> list[dict]:
                     "input_gate_count": len(qc.data),
                 }
             )
+    for source_id, family in CORPUS_CASES.items():
+        source = ROOT / "corpora" / "qasmbench" / f"{source_id}.qasm"
+        qc, removed = corpus_unitary(source)
+        qc = transpile(qc, basis_gates=["h", "x", "rx", "ry", "rz", "cx"], optimization_level=0)
+        name = f"qasmbench-{source_id}"
+        qasm = qasm2.dumps(qc) + "\n"
+        path = folder / f"{name}.qasm"
+        path.write_text(qasm)
+        cases.append(
+            {
+                "id": name,
+                "family": family,
+                "qubits": qc.num_qubits,
+                "parameters": {"variant": source_id, "removed_instructions": removed},
+                "provenance": {
+                    "corpus": "QASMBench",
+                    "revision": QASMBENCH_REVISION,
+                    "url": f"https://github.com/pnnl/QASMBench/blob/{QASMBENCH_REVISION}/small/{source_id}/{source_id}.qasm",
+                    "source_path": str(source.relative_to(ROOT)),
+                    "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                    "license_path": "corpora/qasmbench/LICENSE",
+                    "transformation": (
+                        "remove barriers and per-wire terminal measurements; "
+                        "retain preparation; Qiskit level-0 lowering"
+                    ),
+                },
+                "path": str(path.relative_to(ROOT)),
+                "sha256": hashlib.sha256(qasm.encode()).hexdigest(),
+                "input_gate_count": len(qc.data),
+            }
+        )
     return cases
 
 
@@ -274,7 +340,18 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
     }
 
 
-def run_pilot() -> None:
+def run_pilot(*, overwrite: bool = False) -> None:
+    results_path = ROOT / "data" / "results.json"
+    if results_path.exists():
+        previous = json.loads(results_path.read_text())
+        if previous["suite"] != SUITE:
+            archive = ROOT / "releases" / previous["suite"] / "data" / "results.json"
+            if not archive.exists() or archive.read_bytes() != results_path.read_bytes():
+                raise RuntimeError("Archive the existing release before changing suites")
+        elif not overwrite:
+            raise RuntimeError(
+                "Results already exist; use --overwrite to explicitly rerun this suite"
+            )
     if not hasattr(os, "sched_setaffinity"):
         raise RuntimeError("This pilot requires Linux CPU affinity")
     allowed = sorted(os.sched_getaffinity(0))
@@ -347,7 +424,7 @@ def run_pilot() -> None:
     )
     document = {
         "schema_version": 1,
-        "suite": "pilot-v0.1",
+        "suite": SUITE,
         "created_at": datetime.now(UTC).isoformat(),
         "formal_ranking": False,
         "environment": {
@@ -404,9 +481,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["run", "worker"])
     parser.add_argument("args", nargs="*")
+    parser.add_argument("--overwrite", action="store_true")
     options = parser.parse_args()
     if options.action == "run":
-        run_pilot()
+        run_pilot(overwrite=options.overwrite)
     else:
         case_id, compiler, target, seed = options.args
         manifest = json.loads((ROOT / "data" / "manifest.json").read_text())
