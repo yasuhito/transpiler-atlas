@@ -1,4 +1,4 @@
-# Pilot v0.2: protocol and limitations
+# Pilot v0.3: protocol and limitations
 
 This is an end-to-end feasibility experiment, not the formal suite v1 proposed in the methodology. It tests compilation, output constraints, and equivalence with input/output wire maps taken into account.
 
@@ -38,7 +38,7 @@ Then open `http://localhost:8765/`. Results and HTML are generated artifacts and
 | VQE (QASMBench) | 4 qubits | `vqe_n4`, published fixed ansatz angles, no energy/optimizer evaluation |
 | Hamiltonian (QASMBench) | 10 qubits | `ising_n10`, published fixed Ising circuit |
 
-The six original inputs are generated with Qiskit; six additional inputs are imported from QASMBench. All are lowered, without optimization or topology constraints, to `h,x,rx,ry,rz,cx` using level 0. Both compilers receive the same frozen OpenQASM 2 input.
+The six original inputs are generated with Qiskit; six additional inputs are imported from QASMBench. All are lowered, without optimization or topology constraints, to `h,x,rx,ry,rz,cx` using level 0. All three compilers receive the same frozen OpenQASM 2 input. The input manifest and hashes are unchanged from v0.2.
 
 This is a **common low-level input track**, not a generator-independent high-level comparison. The chosen generator and lowering rules can influence results and remove useful algorithmic structure. No claim is made that this input track evaluates every compiler's high-level capabilities fairly.
 
@@ -46,9 +46,9 @@ This is a **common low-level input track**, not a generator-independent high-lev
 
 ## Release preservation
 
-[The Pilot v0.1 archive](../releases/pilot-v0.1/index.html) preserves its original report, raw data, artifacts, documentation, runner, and dependency lock. Current results are a new measurement of all 12 cases, not a merge of old and new timings. Cross-release absolute timing comparisons are not controlled comparisons.
+[Pilot v0.1](../releases/pilot-v0.1/index.html) and [Pilot v0.2](../releases/pilot-v0.2/index.html) preserve their original reports, raw data, artifacts, documentation, runners, and dependency locks. v0.2 also retains its corpus sources. The v0.2 snapshot includes its linked v0.1 archive so its original relative links remain usable without rewriting historical HTML. Current results are a new measurement of all 12 cases, not a merge of old and new timings. Cross-release absolute timing comparisons are not controlled comparisons.
 
-The runner refuses a suite change without a matching archived results file. Repeating v0.2 requires `--overwrite`; preserve another snapshot first if the rerun must remain available. Tests generate inputs in temporary directories rather than changing published inputs.
+The runner refuses a suite change without a matching archived results file. Repeating v0.3 requires `--overwrite`; preserve another snapshot first if the rerun must remain available. Tests generate inputs in temporary directories rather than changing published inputs.
 
 ## Target and pipelines
 
@@ -56,18 +56,19 @@ The physical width equals the input's total width. Targets are fully connected o
 
 - **Qiskit:** preset level 2, `approximation_degree=1.0`, seeds 7/19/43.
 - **pytket:** `FullPeepholeOptimise(allow_swaps=False)` → `DefaultMappingPass` using GraphPlacement → `SynthesiseTket` → `AutoRebase(rz,sx,x,cx,allow_swaps=False)`.
+- **BQSKit:** standard level 1 `compile`, two-qubit maximum synthesis size, `synthesis_epsilon=1e-12`, explicit MachineModel for the shared target/basis, `with_mapping=True`, seeds 7/19/43, one local worker and one BLAS thread. [Adapter settings and numerical limitations](bqskit.md).
 
 The pytket pipeline is explicit and specific to this experiment, not a claim about the default recommended pipeline for all backends. No seed is passed to this pipeline. Its three seed slots are repeated measurements, not three independently seeded configurations.
 
 ## Timing and environment
 
-12 circuits in six families × 2 targets × 2 compilers × 3 seed slots = 144 entries. Each entry has three compilation repetitions; all 432 recorded outputs passed validation. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
+12 circuits in six families × 2 targets × 3 compilers × 3 seed slots = 216 scheduled entries, each with three compilation repetitions (648 potential output checks). All 216 entries completed without timeout or worker error. Of 648 recorded outputs, 597 passed the strict check; the other 51 are from 17 BQSKit line-target entries. Qiskit and pytket each passed all 72 entries; BQSKit passed 55 of 72. BQSKit verification failures remain in the data and yield N/A, not a surviving-case score. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
 
 The machine is shared. The runner pins affinity to the first permitted CPU and sets thread environment variables to one. CPU frequency, sibling hardware threads, and other jobs are not controlled. It is not an exclusive-machine measurement. Full metadata is in [results.json](../data/results.json).
 
-Timing includes pipeline construction and compilation. SDK import, parsing, export, conversion for validation, and equivalence checking are excluded. The first repetition can include first-use costs; this is not a rigorously warm-only measurement.
+Timing includes pipeline construction and compilation. SDK import, parsing, export, conversion for validation, equivalence checking, and BQSKit local runtime startup/shutdown are excluded. BQSKit model construction and workflow execution are timed. A new BQSKit runtime is created for every repetition, with one worker and one BLAS thread. The first repetition can include first-use costs; this is not a rigorously warm-only measurement.
 
-Each entry runs in a new worker, with its three repetitions in the same process. A 120-second worker timeout includes all repetitions and checking. It is not a 60-second limit on one compilation. No memory cap is enforced. Worker order is shuffled with a fixed seed.
+Each entry runs in a new worker, with its three repetitions in the same process. A 120-second worker timeout includes all repetitions and checking. It is not a 60-second limit on one compilation. No memory cap is enforced. Timed-out workers and their local runtime descendants are terminated as one process group. Worker order is shuffled with a fixed seed.
 
 The UI reports the median of the three timing repetitions within each seed slot, then the median across the three slots. Gate counts and depths use the same two-stage aggregation. Every repetition is retained in the raw data. Timing tooltips in the per-circuit view show the range of all nine samples.
 
@@ -77,9 +78,9 @@ Every output is checked against a shared definition of the gate set, directed co
 
 2Q depth is the longest weighted path through the full qubit-dependency DAG: 2Q gates have weight one and 1Q gates have weight zero. Total depth gives every gate weight one. SDK-specific moment counts are not compared directly.
 
-Initial and final maps come from Qiskit's layout and pytket's CompilationUnit. A validation copy restores input wire labeling and adds terminal measurements according to the final logical output order. These measurements are not present in the published native output or counted metrics.
+Initial and final maps come from Qiskit's layout, pytket's CompilationUnit, and BQSKit's `with_mapping=True` result. A validation copy restores input wire labeling and adds terminal measurements according to the final logical output order. These measurements are not present in the published native output or counted metrics.
 
-QCEC's decision-diagram checkers run with simulation and ZX checking disabled, one thread, and a 20-second verification timeout. Only `equivalent` and `equivalent_up_to_global_phase` are accepted. `probably_equivalent` is not accepted. Floating-point angles and the checker's tolerances/assumptions still apply; this is not represented as an unconditional mathematical proof. Checker details are retained per trial.
+QCEC's decision-diagram checkers run with simulation and ZX checking disabled, one thread, and a 20-second verification timeout. Only `equivalent` and `equivalent_up_to_global_phase` are accepted. The checker's default `1e-8` trace/identity threshold is unchanged for every compiler; no approximate or relaxed-verification track is mixed into the scores. `probably_equivalent` is not accepted. Floating-point angles and the checker's tolerances/assumptions still apply; this is not represented as an unconditional mathematical proof. Checker details are retained per trial.
 
 During development, the adder exposed a mapping bug in the measurement code: Qiskit preserves register declaration order while pytket sorts register names. Maps now use the input declaration order, with an actual-pipeline regression test. Tests also deliberately corrupt a gate and a final map to ensure the checker rejects them.
 

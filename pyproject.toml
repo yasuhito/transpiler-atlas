@@ -9,6 +9,7 @@ dependencies = [
   "pytket-qiskit>=0.70,<1",
   "mqt.qcec>=3,<4",
   "markdown>=3.7,<4",
+  "bqskit>=1.2,<2",
 ]
 
 [dependency-groups]

@@ -10,6 +10,7 @@ import math
 import os
 import platform
 import random
+import signal
 import statistics
 import subprocess
 import sys
@@ -21,7 +22,9 @@ ROOT = Path(__file__).resolve().parent
 BASIS = {"rz", "sx", "x", "cx"}
 SEEDS = [7, 19, 43]
 REPEATS = 3
-SUITE = "pilot-v0.2"
+SUITE = "pilot-v0.3"
+COMPILERS = ["qiskit", "pytket", "bqskit"]
+BQSKIT_EPSILON = 1e-12
 QASMBENCH_REVISION = "357b942396d5c2b7cbc1c229c585a6ef5ccaebac"
 CORPUS_CASES = {
     "qft_n4": "QFT",
@@ -288,6 +291,38 @@ def compile_once(original, compiler: str, target: str, seed: int):
         initial = [physical.index(unit.initial_map[q]) for q in logical_qubits]
         final = [physical.index(unit.final_map[q]) for q in logical_qubits]
         native = tk_to_qiskit(unit.circuit, replace_implicit_swaps=False, perm_warning=False)
+    elif compiler == "bqskit":
+        from bqskit import compile as bq_compile
+        from bqskit.compiler import Compiler, MachineModel
+        from bqskit.ext.qiskit import qiskit_to_bqskit
+        from bqskit.ir.gates import CNOTGate, RZGate, SXGate, XGate
+        from bqskit.ir.lang.qasm2 import OPENQASM2Language
+
+        circuit = qiskit_to_bqskit(original)
+        # Local runtime startup/shutdown is outside the compile timer.
+        with Compiler(num_workers=1, num_blas_threads=1) as runtime:
+            start = time.perf_counter_ns()
+            model = MachineModel(
+                n,
+                coupling_graph=[(a, b) for a, b in edges if a < b],
+                gate_set={RZGate(), SXGate(), XGate(), CNOTGate()},
+            )
+            compiled, initial, final = bq_compile(
+                circuit,
+                model=model,
+                optimization_level=1,
+                max_synthesis_size=2,
+                synthesis_epsilon=BQSKIT_EPSILON,
+                seed=seed,
+                with_mapping=True,
+                compiler=runtime,
+            )
+            elapsed = (time.perf_counter_ns() - start) / 1e6
+        native = qasm2.loads(
+            OPENQASM2Language().encode(compiled),
+            custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS,
+        )
+        initial, final = list(initial), list(final)
     else:
         raise ValueError(compiler)
     return native, elapsed, initial, final
@@ -328,7 +363,7 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
         "compiler": compiler,
         "target": target,
         "seed": seed,
-        "seed_supported": compiler == "qiskit",
+        "seed_supported": compiler in {"qiskit", "bqskit"},
         "status": "passed" if valid else "verification_failed",
         "compile_ms": statistics.median(timings),
         "timing_samples_ms": timings,
@@ -364,7 +399,7 @@ def run_pilot(*, overwrite: bool = False) -> None:
     jobs = [
         (case, compiler, target, seed)
         for case in cases
-        for compiler in ["qiskit", "pytket"]
+        for compiler in COMPILERS
         for target in ["all-to-all", "line"]
         for seed in SEEDS
     ]
@@ -394,12 +429,28 @@ def run_pilot(*, overwrite: bool = False) -> None:
             str(seed),
         ]
         try:
-            execution = subprocess.run(
-                command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=120
-            )
-            if execution.returncode:
-                raise RuntimeError(execution.stderr[-4000:])
-            result = json.loads(execution.stdout)
+            with subprocess.Popen(
+                command,
+                cwd=ROOT,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            ) as execution:
+                try:
+                    stdout, stderr = execution.communicate(timeout=120)
+                except subprocess.TimeoutExpired:
+                    # BQSKit starts local runtime processes; terminate the whole job.
+                    try:
+                        os.killpg(execution.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass  # The group finished between timeout and termination.
+                    execution.communicate()
+                    raise
+                if execution.returncode:
+                    raise RuntimeError(stderr[-4000:])
+                result = json.loads(stdout)
         except subprocess.TimeoutExpired:
             result = {"status": "timeout", "error": "120 s worker budget exceeded"}
         except (RuntimeError, json.JSONDecodeError) as error:
@@ -446,7 +497,7 @@ def run_pilot(*, overwrite: bool = False) -> None:
             },
             "versions": {
                 p: importlib.metadata.version(p)
-                for p in ["qiskit", "pytket", "pytket-qiskit", "mqt.qcec"]
+                for p in ["qiskit", "pytket", "pytket-qiskit", "mqt.qcec", "bqskit", "bqskitrs"]
             },
             "exclusive_machine": False,
             "memory_limit_enforced": False,
@@ -454,6 +505,7 @@ def run_pilot(*, overwrite: bool = False) -> None:
         "protocol": {
             "seeds": SEEDS,
             "timing_repeats": REPEATS,
+            "compilers": COMPILERS,
             "worker_timeout_seconds": 120,
             "basis": sorted(BASIS),
             "physical_qubits": "equal to input width",
@@ -467,6 +519,18 @@ def run_pilot(*, overwrite: bool = False) -> None:
                 "AutoRebase(rz,sx,x,cx)",
             ],
             "qiskit_pipeline": "preset level 2, approximation_degree=1.0",
+            "bqskit_pipeline": {
+                "optimization_level": 1,
+                "max_synthesis_size": 2,
+                "synthesis_epsilon": BQSKIT_EPSILON,
+                "num_workers": 1,
+                "num_blas_threads": 1,
+                "with_mapping": True,
+                "error_threshold": None,
+                "runtime_timing": (
+                    "local runtime startup/shutdown excluded; new runtime per repetition"
+                ),
+            },
             "validation": "QCEC decision diagrams, no simulation/ZX, 20 s verification timeout",
         },
         "cases": cases,

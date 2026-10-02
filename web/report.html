@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Quantum transpiler benchmark results by compiler, circuit, topology, and metric.">
   <title>Transpiler Atlas | Benchmark results</title>
+  <script src="web/theme.js"></script>
+  <link rel="stylesheet" href="web/theme.css">
   <link rel="stylesheet" href="web/style.css">
 </head>
 <body>
@@ -19,12 +21,13 @@
         <a href="docs/research.html">Sources</a>
         <a href="data/results.json" download>Data <span aria-hidden="true">↗</span></a>
       </nav>
+      <label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label>
     </div>
   </header>
   <main id="main">
     <div class="page-heading">
       <h1>Benchmark results</h1>
-      <div class="release"><span class="badge">Pilot v0.2</span><span id="updated"></span></div>
+      <div class="release"><span class="badge">Pilot v0.3</span><span id="updated"></span></div>
     </div>
     <p class="dataset-meta" id="dataset-meta"></p>
     <p class="pilot-note">Exploratory results, not a formal ranking. Shared host, small circuits, one CPU core. <a href="docs/pilot.html">Evaluation details ↗</a></p>
@@ -57,8 +60,8 @@
       <div id="empty" class="empty" hidden>No measured circuits match these filters. <button id="empty-reset" class="text-button">Reset filters</button></div>
     </section>
 
-    <details id="environment" class="run-details"><summary>Run configuration and interpretation</summary><div class="details-grid"><div><h2>Measurement</h2><dl id="environment-fields"></dl></div><div><h2>Interpretation</h2><ul><li>Quality combines 2Q count and 2Q depth. Scores use equal family weights and the same run's Qiskit baseline of 100.</li><li>Speed uses a 1 ms floor. A score is shown only when every required trial passes validation.</li><li>pytket does not accept the seed in this pipeline. Its three seed slots are repeated measurements, not independent seeded configurations.</li><li>Timing includes pipeline construction and compilation. Parsing, export, conversion for validation, and QCEC are excluded.</li><li>No enforced memory cap, exclusive host, or CPU frequency control. A first-use cost can enter the first of three timing repetitions.</li></ul><a href="docs/pilot.html">Full pilot protocol ↗</a></div></div></details>
-    <footer><span id="footer-meta"></span><div><a href="data/manifest.json">Input manifest</a><a href="data/results.json">Raw JSON</a><a href="docs/design.html">Design references</a><a href="releases/pilot-v0.1/index.html">Pilot v0.1 archive</a></div></footer>
+    <details id="environment" class="run-details"><summary>Run configuration and interpretation</summary><div class="details-grid"><div><h2>Measurement</h2><dl id="environment-fields"></dl></div><div><h2>Interpretation</h2><ul><li>Quality combines 2Q count and 2Q depth. Scores use equal family weights and the same run's Qiskit baseline of 100.</li><li>Speed uses a 1 ms floor. A score is shown only when every required trial passes validation.</li><li>pytket does not accept the seed in this pipeline. Its three seed slots are repeated measurements, not independent seeded configurations.</li><li>Timing includes pipeline construction and compilation. Parsing, export, conversion for validation, QCEC, and BQSKit local runtime startup/shutdown are excluded.</li><li>No enforced memory cap, exclusive host, or CPU frequency control. A first-use cost can enter the first of three timing repetitions.</li></ul><a href="docs/pilot.html">Full pilot protocol ↗</a></div></div></details>
+    <footer><span id="footer-meta"></span><div><a href="data/manifest.json">Input manifest</a><a href="data/results.json">Raw JSON</a><a href="releases/pilot-v0.2/index.html">Pilot v0.2</a><a href="releases/pilot-v0.1/index.html">Pilot v0.1</a></div></footer>
     <noscript><p>JavaScript is required for interactive results. <a href="data/results.json">Download the raw data</a>.</p></noscript>
   </main>
   <script id="benchmark-data" type="application/json">__BENCHMARK_DATA__</script>

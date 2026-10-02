@@ -72,6 +72,25 @@ def test_actual_pipeline_preserves_input_including_multiple_registers(compiler, 
     assert check_equivalence(original, native, initial, final)["accepted"]
 
 
+@pytest.mark.parametrize(
+    ("case_id", "target", "accepted"),
+    [
+        ("qasmbench-qaoa_n3", "line", True),
+        ("adder-6q", "all-to-all", True),
+        ("adder-6q", "line", False),
+    ],
+)
+def test_bqskit_real_pipeline_and_strict_numerical_gate(inputs, case_id, target, accepted):
+    case = next(c for c in inputs if c["id"] == case_id)
+    original = qasm2.load(atlas.ROOT / case["path"])
+    native, elapsed, initial, final = compile_once(original, "bqskit", target, 7)
+    assert elapsed > 0
+    metrics(native, edges_for(original.num_qubits, target))
+    assert sorted(initial) == sorted(final) == list(range(original.num_qubits))
+    # This pinned pipeline's line adder exceeds the unchanged checker tolerance.
+    assert check_equivalence(original, native, initial, final)["accepted"] is accepted
+
+
 def test_manifest_provenance_and_regeneration_are_stable(inputs):
     assert len(inputs) == 12
     assert len({c["family"] for c in inputs}) == 6
@@ -114,7 +133,7 @@ def test_corpus_allows_disjoint_gates_after_readout(tmp_path):
 
 def test_existing_suite_requires_explicit_overwrite(tmp_path, monkeypatch):
     (tmp_path / "data").mkdir()
-    (tmp_path / "data/results.json").write_text('{"suite": "pilot-v0.2"}')
+    (tmp_path / "data/results.json").write_text('{"suite": "pilot-v0.3"}')
     monkeypatch.setattr(atlas, "ROOT", tmp_path)
     with pytest.raises(RuntimeError, match="--overwrite"):
         atlas.run_pilot()

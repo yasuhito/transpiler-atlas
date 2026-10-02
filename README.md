@@ -1,6 +1,6 @@
 # Transpiler Atlas
 
-An English-language, table-first viewer for measured quantum transpiler benchmark results. Current data is a small **Qiskit/pytket pilot**, not a formal ranking or a general claim about SDK superiority.
+An English-language, table-first viewer for measured quantum transpiler benchmark results. Current data is a small **Qiskit/pytket/BQSKit pilot**, not a formal ranking or a general claim about SDK superiority.
 
 ## Open the site
 
@@ -21,7 +21,7 @@ Views:
 
 Shared filters select topology, family, qubit width, compiler, and metric. Column controls, sortable headers, and URL-fragment permalinks preserve an analysis-oriented interface. There is no promotional hero or catchphrase. Linked documentation is also English.
 
-The UI was revised after inspecting SWE-bench, DeepSWE, LiveBench, and Artificial Analysis. [Design review](docs/design.md) / [HTML](docs/design.html).
+The header's Theme control selects **Light**, **Dark**, or **System** (the default). The preference is saved when browser storage is available and shared with linked documentation. System follows live OS/browser color-scheme changes. Theme assets work offline.
 
 ## Reproduce and test
 
@@ -48,11 +48,12 @@ Open `http://localhost:8765/`. Deploy the site tree together with `web/`, `docs/
 
 ## Implemented pilot
 
-Pilot v0.2: 12 circuits × 2 topologies × 2 compilers × 3 seed slots, with three repetitions each: 144 entries and 432 output checks. All recorded outputs passed QCEC's decision-diagram equivalence check.
+Pilot v0.3: 12 circuits × 2 topologies × 3 compilers × 3 seed slots, with three repetitions each: 216 scheduled entries and up to 648 output checks. All 216 entries completed; 597/648 outputs passed strict validation. BQSKit had 17 verification-failed line-target entries; all 36 of its all-to-all entries passed. BQSKit outputs that fail the unchanged strict QCEC check remain unverified and receive N/A, rather than having the verifier relaxed.
 
 - Six families: QFT, QAOA, Adder, Grover, VQE, Hamiltonian. Six original generated circuits plus six fixed QASMBench imports.
 - [Corpus sources and license review](docs/corpora.md); original QASM, license, parameters, and source/input hashes are retained. Expand Input details in the per-circuit view.
-- [Pilot v0.1 archive](releases/pilot-v0.1/index.html) keeps its original report, measurements, artifacts, sources, and dependency lock.
+- [Pilot v0.1](releases/pilot-v0.1/index.html) and [Pilot v0.2](releases/pilot-v0.2/index.html) retain their original reports, measurements, artifacts, sources, and dependency locks.
+- [BQSKit adapter](docs/bqskit.md): standard level 1, two-qubit blocks, synthesis epsilon `1e-12`, seeded, one local worker/BLAS thread, returned wire maps, unchanged QCEC acceptance.
 - Targets: input-width all-to-all and line, bidirectional CX.
 - Native basis: `rz,sx,x,cx`.
 - Shared host, single-core affinity; not an exclusive controlled machine.
@@ -67,17 +68,18 @@ See [pilot protocol](docs/pilot.md) / [HTML](docs/pilot.html) for precision, map
 - `atlas.py`: input generation, explicit pipelines, measurement, validation.
 - `build_site.py`: static report and documentation generator.
 - `web/report.html`, `web/style.css`, `web/app.js`: editable site sources.
+- `web/theme.css`, `web/theme.js`: shared theme tokens, preference persistence, and system-theme handling.
 - [Raw results](data/results.json), [input manifest](data/manifest.json), `data/inputs/`, `data/outputs/`.
 - [Landscape and candidates](docs/research.md) / [HTML](docs/research.html).
 - [Formal methodology proposal](docs/methodology.md) / [HTML](docs/methodology.html).
 
-`index.html`, `docs/*.html`, and `data/*` are generated artifacts. Do not hand-edit them. `corpora/` contains unmodified licensed upstream inputs. `releases/pilot-v0.1/` is an immutable copy of the published pilot; do not regenerate it with current sources.
+`index.html`, `docs/*.html`, and `data/*` are generated artifacts. Do not hand-edit them. `corpora/` contains unmodified licensed upstream inputs. `releases/` contains immutable published snapshots; do not regenerate them with current sources. v0.2 includes its linked v0.1 snapshot to preserve historical relative links.
 
 `atlas.py run` refuses to replace current-suite measurements without `--overwrite`, and refuses a suite change without a matching archived results file. Preserve any measurements you need before explicitly overwriting them. Tests generate their inputs in temporary directories.
 
 ## Planned scope
 
-Add BQSKit next on the same inputs, then Cirq after choosing an explicit pipeline. Broaden widths, parameter sets, and fixed grid/large targets after validating adapters. Shor, specialized mapping, fault-tolerant, cloud, and dynamic-circuit tracks remain separate proposals. No unmeasured compilers appear as fabricated leaderboard entries.
+Add Cirq after choosing an explicit pipeline. BQSKit's higher optimization levels and approximate-error tracks require separate declared configurations. Broaden widths, parameter sets, and fixed grid/large targets after validating adapters. Shor, specialized mapping, fault-tolerant, cloud, and dynamic-circuit tracks remain separate proposals. No unmeasured compilers appear as fabricated leaderboard entries.
 
 Compiler benchmarking already exists in Benchpress, ucc-bench, Arline, and others. This project aims at reproducible conditional results presentation, not a claim to be the first comparison.
 

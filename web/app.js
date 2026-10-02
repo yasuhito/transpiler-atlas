@@ -11,8 +11,10 @@ const geometricMean = values => Math.exp(values.reduce((a, b) => a + Math.log(b)
 const esc = value => String(value).replace(/[&<>"']/g, c => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
-const label = compiler => compiler === 'qiskit' ? 'Qiskit' : 'pytket';
-const colors = { qiskit: '#3470e5', pytket: '#cb7a46' };
+const compilerIds = data.protocol.compilers ?? [...new Set(data.results.map(r => r.compiler))];
+const label = compiler => ({ qiskit: 'Qiskit', pytket: 'pytket', bqskit: 'BQSKit' })[compiler] ?? compiler;
+const colors = { qiskit: 'var(--qiskit)', pytket: 'var(--pytket)', bqskit: 'var(--bqskit)' };
+const configurations = { qiskit: 'Preset level 2', pytket: 'Peephole + mapping + rebase', bqskit: 'Level 1 · 2Q blocks' };
 const metrics = {
   quality: { name: 'Quality', higher: true, unit: 'reference = 100' },
   speed: { name: 'Speed', higher: true, unit: 'reference = 100' },
@@ -25,10 +27,12 @@ const state = { ...defaults };
 const enums = {
   view: ['leaderboard', 'circuits', 'matrix', 'tradeoff'],
   target: ['line', 'all-to-all'], family: ['all', ...new Set(data.cases.map(c => c.family))],
-  width: ['all', ...new Set(data.cases.map(c => String(c.qubits)))], compiler: ['all', 'qiskit', 'pytket'],
+  width: ['all', ...new Set(data.cases.map(c => String(c.qubits)))], compiler: ['all', ...compilerIds],
   metric: Object.keys(metrics), columns: ['on', 'off'], y: ['count', 'depth'],
 };
 
+$('compiler').innerHTML = '<option value="all">All compilers</option>' + compilerIds.map(c => `<option value="${esc(c)}">${esc(label(c))}</option>`).join('');
+document.querySelector('.legend').innerHTML = compilerIds.map(c => `<span><i class="dot ${esc(c)}"></i>${esc(label(c))}</span>`).join('');
 $('width').innerHTML = '<option value="all">All widths</option>' + [...new Set(data.cases.map(c => c.qubits))].sort((a, b) => a - b).map(n => `<option value="${n}">${n} qubits</option>`).join('');
 document.querySelector('.categories').innerHTML = enums.family.map(f => `<button data-family="${esc(f)}" aria-pressed="${f === 'all'}">${f === 'all' ? 'All' : esc(f)}</button>`).join('');
 
@@ -60,7 +64,7 @@ function saveHash() {
   $('permalink').href = location.href;
 }
 function aggregate(cases) {
-  return cases.flatMap(circuit => ['qiskit', 'pytket'].map(compiler => {
+  return cases.flatMap(circuit => compilerIds.map(compiler => {
     const rows = data.results.filter(r => r.target === state.target && r.case_id === circuit.id && r.compiler === compiler);
     const seeds = rows.map(r => r.seed).sort((a, b) => a - b);
     const expected = [...data.protocol.seeds].sort((a, b) => a - b);
@@ -134,10 +138,10 @@ function renderLeaderboard(items, compilers) {
   const detailed = state.columns === 'on';
   $('result-head').innerHTML = `<tr><th scope="col">#</th><th scope="col">Compiler / configuration</th>${heading('quality')}${heading('speed')}${heading('count')}${heading('depth')}${heading('time')}${detailed ? families.map(f => '<th class="num" scope="col">' + esc(f) + '<small>quality</small></th>').join('') : ''}<th class="num" scope="col">Validated<small>circuits</small></th></tr>`;
   $('result-rows').innerHTML = rows.map(row => {
-    const config = row.compiler === 'qiskit' ? 'Preset level 2' : 'Peephole + mapping + rebase';
+    const config = configurations[row.compiler] ?? row.compiler;
     const eligible = row[state.metric] !== null;
     const rank = eligible ? 1 + rows.filter(r => r[state.metric] !== null && (metrics[state.metric].higher ? r[state.metric] > row[state.metric] : r[state.metric] < row[state.metric])).length : 'N/A';
-    return `<tr data-compiler="${row.compiler}"><td class="rank">${rank}</td><td>${nameCell(row.compiler, true)}<span class="sub">${config}</span></td>${['quality', 'speed', 'count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? families.map(f => '<td class="num">' + value(row.familyScores[f], 'quality') + '</td>').join('') : ''}<td class="num ${row.complete ? 'valid' : ''}">${row.passed}/${row.rows.length}</td></tr>`;
+    return `<tr data-compiler="${row.compiler}"><td class="rank">${rank}</td><td>${nameCell(row.compiler, true)}<span class="sub">${esc(config)}</span></td>${['quality', 'speed', 'count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? families.map(f => '<td class="num">' + value(row.familyScores[f], 'quality') + '</td>').join('') : ''}<td class="num ${row.complete ? 'valid' : ''}">${row.passed}/${row.rows.length}</td></tr>`;
   }).join('');
   $('view-note').innerHTML = 'Quality and Speed are exploratory, family-balanced scores relative to Qiskit = 100. Raw 2Q count, depth, and time columns are medians across selected circuits, not normalized scores. Missing required trials produce N/A. <a href="docs/pilot.html">Definitions ↗</a>';
 }
@@ -147,13 +151,17 @@ function inputDetails(id) {
   const source = p ? `<a href="${esc(p.url)}">${esc(p.corpus)} source ↗</a> · <a href="${esc(p.source_path)}">Original QASM</a> · <a href="${esc(p.license_path)}">License</a>` : 'Atlas-generated input';
   return `<details class="input-details"><summary>Input details</summary>${source}<div class="mono">${esc(JSON.stringify(circuit.parameters))}</div><div>${esc(p?.transformation ?? 'Qiskit level-0 lowering')}</div><div class="mono">SHA-256: ${esc(circuit.sha256)}</div></details>`;
 }
+function validationDetails(row) {
+  if (row.complete) return '';
+  return `<details class="input-details"><summary>Validation details</summary>${row.rows.map(r => `<div>Seed slot ${r.seed}: ${esc(r.status)}; ${esc((r.trials ?? []).map(t => t.validation.criterion).join(', '))}</div>`).join('')}</details>`;
+}
 function renderCircuits(items) {
   const detailed = state.columns === 'on';
   const scoreColumn = ['quality', 'speed'].includes(state.metric);
   $('result-head').innerHTML = `<tr><th scope="col">Circuit</th><th scope="col">Compiler</th>${scoreColumn ? heading(state.metric) : ''}${heading('count')}${heading('depth')}${heading('time')}${detailed ? '<th class="num" scope="col">1Q count</th><th class="num" scope="col">Total depth</th>' : ''}<th scope="col">Validation / artifact</th></tr>`;
   $('result-rows').innerHTML = [...items].sort(compare).map(row => {
     const artifact = row.rows[0]?.trials?.[0]?.artifact;
-    return `<tr data-compiler="${row.compiler}"><td><strong class="mono">${esc(row.id)}</strong><span class="sub" style="margin-left:0">${esc(row.family)} · ${row.qubits} qubits</span>${inputDetails(row.id)}</td><td>${nameCell(row.compiler, detailed)}</td>${scoreColumn ? numberCell(row, state.metric) : ''}${['count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? numberCell(row, 'one') + numberCell(row, 'total') : ''}<td><span class="${row.complete ? 'valid' : 'artifact'}">${row.complete ? 'QCEC passed' : 'Incomplete / unverified'}</span>${artifact ? ' · <a class="artifact" href="' + esc(artifact) + '">QASM ↗</a>' : ''}</td></tr>`;
+    return `<tr data-compiler="${row.compiler}"><td><strong class="mono">${esc(row.id)}</strong><span class="sub" style="margin-left:0">${esc(row.family)} · ${row.qubits} qubits</span>${inputDetails(row.id)}</td><td>${nameCell(row.compiler, detailed)}</td>${scoreColumn ? numberCell(row, state.metric) : ''}${['count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? numberCell(row, 'one') + numberCell(row, 'total') : ''}<td><span class="${row.complete ? 'valid' : 'artifact'}">${row.complete ? 'QCEC passed' : 'Incomplete / unverified'}</span>${validationDetails(row)}${artifact ? ' · <a class="artifact" href="' + esc(artifact) + '">QASM ↗</a>' : ''}</td></tr>`;
   }).join('');
   $('view-note').textContent = 'Each value is the median across three seed slots; each slot has three timing repetitions. Hover over time for the nine-sample range. The QASM link opens the first output trial. Per-circuit scores use that circuit’s Qiskit reference.';
 }
@@ -189,15 +197,18 @@ function renderPlot(items) {
     svg += `<line x1="${x(v)}" x2="${x(v)}" y1="${top}" y2="${height - bottom}" stroke="#e9ecf1"/><text x="${x(v)}" y="${height - bottom + 22}" text-anchor="middle" fill="#818b99" font-size="10">${v.toLocaleString('en-US', { maximumFractionDigits: 3 })}</text>`;
   }
   for (const id of new Set(rows.map(r => r.id))) {
-    const pair = rows.filter(r => r.id === id);
-    if (pair.length === 2) svg += `<line x1="${x(pair[0].time)}" y1="${y(pair[0][key])}" x2="${x(pair[1].time)}" y2="${y(pair[1][key])}" stroke="#cdd3df" stroke-dasharray="3 4"/>`;
+    const group = rows.filter(r => r.id === id);
+    const reference = group.find(r => r.compiler === 'qiskit');
+    if (reference) for (const row of group.filter(r => r !== reference)) {
+      svg += `<line x1="${x(reference.time)}" y1="${y(reference[key])}" x2="${x(row.time)}" y2="${y(row[key])}" stroke="var(--border)" stroke-dasharray="3 4"/>`;
+    }
   }
   const points = rows.map(row => ({ row, px: x(row.time), py: y(row[key]) }));
   const occupied = [];
   const intersects = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   for (const { row, px, py } of [...points].sort((a, b) => a.py - b.py)) {
     const description = `${row.id} / ${label(row.compiler)}: ${row[key]} ${metrics[key].unit}, ${row.time.toFixed(2)} ms`;
-    svg += `<circle cx="${px}" cy="${py}" r="4.5" fill="${colors[row.compiler]}" stroke="white" stroke-width="1.5" tabindex="0" aria-label="${esc(description)}"><title>${esc(description)}</title></circle>`;
+    svg += `<circle class="${esc(row.compiler)}" cx="${px}" cy="${py}" r="4.5" fill="${colors[row.compiler]}" stroke="white" stroke-width="1.5" tabindex="0" aria-label="${esc(description)}"><title>${esc(description)}</title></circle>`;
     if (mobile) continue;
     const labelWidth = row.id.length * 6 + 4;
     const candidates = [8, -10, 24, -26, 40, -42].flatMap(dy => [
@@ -210,7 +221,7 @@ function renderPlot(items) {
     if (!box) continue;
     occupied.push(box);
     if (Math.abs(box.y + 10 - py) > 20) svg += `<line x1="${px}" y1="${py}" x2="${box.x}" y2="${box.y + 6}" stroke="${colors[row.compiler]}" opacity=".35"/>`;
-    svg += `<text class="chart-label" x="${box.x}" y="${box.y + 10}" fill="${colors[row.compiler]}" font-size="10">${esc(row.id)}</text>`;
+    svg += `<text class="chart-label ${esc(row.compiler)}" x="${box.x}" y="${box.y + 10}" fill="${colors[row.compiler]}" font-size="10">${esc(row.id)}</text>`;
   }
   svg += `<text x="${left}" y="16" fill="#6e7887" font-size="11">${metrics[key].name}</text><text x="${(width + left - right) / 2}" y="${height - 6}" text-anchor="middle" fill="#6e7887" font-size="10">Compile time · ms (log scale)</text></svg>`;
   $('chart').innerHTML = svg;
@@ -220,7 +231,7 @@ function render() {
   syncControls();
   saveHash();
   const cases = data.cases.filter(c => (state.family === 'all' || c.family === state.family) && (state.width === 'all' || String(c.qubits) === state.width));
-  const compilers = ['qiskit', 'pytket'].filter(c => state.compiler === 'all' || c === state.compiler);
+  const compilers = compilerIds.filter(c => state.compiler === 'all' || c === state.compiler);
   const allItems = scoreCases(aggregate(cases));
   const items = allItems.filter(r => compilers.includes(r.compiler));
   const plot = state.view === 'tradeoff';
@@ -265,13 +276,14 @@ window.addEventListener('resize', () => { if (state.view === 'tradeoff') render(
 const trials = data.results.flatMap(r => r.trials ?? []);
 const accepted = trials.filter(t => t.validation.accepted).length;
 $('updated').textContent = 'Measured ' + data.created_at.slice(0, 10);
-$('dataset-meta').textContent = `${data.cases.length} circuits · ${Object.keys(colors).length} compilers · 2 topologies · ${accepted}/${trials.length} QCEC checks passed`;
+$('dataset-meta').textContent = `${data.cases.length} circuits · ${compilerIds.length} compilers · 2 topologies · ${accepted}/${trials.length} QCEC checks passed`;
 $('footer-meta').textContent = `${data.suite} · rz / sx / x / cx · ${data.environment.python ? 'Python ' + data.environment.python : ''}`;
 const env = data.environment;
 const fields = [
   ['CPU', env.cpu], ['Affinity', env.cpu_affinity.join(', ')], ['OS', env.platform],
   ['Versions', Object.entries(env.versions).map(([k, v]) => k + ' ' + v).join(' · ')],
   ['Qiskit', data.protocol.qiskit_pipeline], ['pytket', data.protocol.pytket_pipeline.join(' → ')],
+  ...(data.protocol.bqskit_pipeline ? [['BQSKit', JSON.stringify(data.protocol.bqskit_pipeline)]] : []),
   ['Validation', data.protocol.validation],
 ];
 $('environment-fields').innerHTML = fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
