@@ -29,12 +29,64 @@ try {
   assert.match(await page.locator('#dataset-meta').innerText(), /3 SDKs · 11 configurations/);
   const ref = () => page.locator('#result-rows tr[data-compiler="qiskit-l2"] .score-value').first();
   assert.equal(await ref().innerText(), '100.0');
+  const annotated = ['bqskit-l2', 'bqskit-l3', 'bqskit-l4'];
+  for (const view of ['leaderboard', 'matrix', 'circuits', 'tradeoff']) {
+    await page.goto(url + '#view=' + view);
+    assert.equal(await page.locator('#approximation-note').isVisible(), true);
+    assert.match(await page.locator('#approximation-note').innerText(), /Strict QCEC acceptance is not guaranteed\./);
+    if (view === 'tradeoff') {
+      for (const spec of raw.protocol.configurations) {
+        const points = page.locator(`#chart circle[data-compiler="${spec.id}"]`);
+        for (const description of await points.evaluateAll(ns => ns.map(n => n.getAttribute('aria-label')))) {
+          assert.equal(description.includes('approx. Numerical approximation'), annotated.includes(spec.id));
+          assert.ok(description.includes(spec.label));
+        }
+      }
+    } else {
+      const tags = page.locator('#results-table .approximation-tag');
+      const ids = await tags.evaluateAll(ns => [...new Set(ns.map(n => n.dataset.configuration))].sort());
+      assert.deepEqual(ids, annotated);
+      assert.equal(await page.getByRole('note', { name: 'Numerical approximation', exact: true }).count(), await tags.count());
+      assert.equal(await tags.first().getAttribute('aria-label'), 'Numerical approximation');
+      assert.equal(await tags.first().getAttribute('aria-describedby'), 'approximation-note');
+      await page.uncheck('#columns');
+      assert.deepEqual(await tags.evaluateAll(ns => [...new Set(ns.map(n => n.dataset.configuration))].sort()), annotated);
+    }
+  }
+  await page.goto(url);
+  await page.selectOption('#configuration', 'bqskit-l1');
+  assert.equal(await page.locator('#approximation-note').isVisible(), false);
+  assert.equal(await page.locator('#results-table .approximation-tag').count(), 0);
+  await page.selectOption('#configuration', 'bqskit-l2');
+  assert.equal(await page.locator('#approximation-note').isVisible(), true);
+  await page.locator('#environment summary').click();
+  assert.match(await page.locator('#environment-fields').innerText(), /Configuration note: bqskit-l4/);
+  assert.equal(await page.getByRole('link', { name: 'Configuration notes (display metadata)' }).getAttribute('href'), 'data/configuration-notes.json');
+  await page.goto(url);
+  await page.evaluate(() => {
+    for (const c of specs) { delete c.numerical_approximation; delete c.approximation_note; }
+    render();
+  });
+  assert.equal(await page.locator('#results-table .approximation-tag').count(), 0);
+  assert.equal(await page.locator('#approximation-note').isVisible(), false);
+  await page.goto(url);
   const unavailable = page.locator('#result-rows tr[data-compiler="bqskit-l2"] td').nth(2);
   assert.equal(await unavailable.locator('.score-value').innerText(), 'N/A');
   await unavailable.locator('summary').focus();
   await page.keyboard.press('Enter');
   assert.match(await unavailable.innerText(), /qasmbench-ising_n10/);
   await page.keyboard.press('Enter');
+  const bqRow = page.locator('#result-rows tr[data-compiler="bqskit-l2"]');
+  const hamiltonian = bqRow.locator('td').nth(await bqRow.locator('td').count() - 2);
+  await hamiltonian.locator('summary').click();
+  assert.match(await hamiltonian.innerText(), /Affected circuits: qasmbench-ising_n10\./);
+  assert.match(await hamiltonian.innerText(), /This is not a returned equivalence failure\./);
+  assert.match(await hamiltonian.innerText(), /Numerical approximation\./);
+  await hamiltonian.locator('summary').click();
+  const qftFamily = bqRow.locator('td').nth(7);
+  await qftFamily.locator('summary').click();
+  assert.match(await qftFamily.innerText(), /Numerical approximation\./);
+  await qftFamily.locator('summary').click();
   await page.locator('#environment summary').click();
   assert.match(await page.locator('#environment-fields').innerText(), /600 s per circuit/);
   assert.match(await page.locator('#environment-fields').innerText(), /42 initial 120 s timeouts/);

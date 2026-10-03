@@ -31,11 +31,25 @@ try {
   await resolved('dark');
   assert.equal(await page.locator(`#result-rows tr[data-compiler="${bqId}"] td`).nth(2).evaluate(n => getComputedStyle(n).backgroundColor), 'rgb(53, 42, 28)');
   assert.equal(await page.locator('a[href*="releases/"]').count(), 0);
+  const tagContrast = async () => {
+    const ratio = await page.locator('#results-table .approximation-tag').first().evaluate(n => {
+      const luminance = color => {
+        const rgb = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+        return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+      };
+      const style = getComputedStyle(n), a = luminance(style.color), b = luminance(style.backgroundColor);
+      return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+    });
+    assert.ok(ratio >= 4.5, `approx. contrast ${ratio}`);
+    assert.equal(await page.locator('#approximation-note').isVisible(), true);
+  };
+  await tagContrast();
   const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   await page.screenshot({ path: '/tmp/transpiler-atlas-dark.png', fullPage: true });
   await page.selectOption('#theme', 'light');
   await resolved('light');
   assert.notEqual(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), darkBg);
+  await tagContrast();
   await page.emulateMedia({ colorScheme: 'dark' });
   await resolved('light');
   await page.reload();

@@ -52,6 +52,8 @@ Pilot v0.4: **11 SDK/configuration entries** on 12 circuits × 2 topologies × 3
 
 The final worker budget is **600 seconds for all three compilations, checks, and startup/shutdown together**, not per compilation. The initial 120-second campaign completed 750 entries; only its 42 timeouts were retried, retaining all 750 completed outcomes exactly. After retry, 633 entries passed, 141 completed with failed verification, and 18 remained timed out, all for the 10-qubit Hamiltonian on BQSKit levels 2/3/4. Of 2,322 recorded outputs, 1,899 passed QCEC. Initial results and per-entry retry histories are preserved. Entirely unmeasured cases remain N/A, not invented zero measurements. BQSKit outputs that fail the unchanged strict QCEC check remain unverified, but their gate counts, depths, and times are displayed. Scores use **`qcec-adjusted-v1`**: unpenalized performance × QCEC pass rate. Failed or missing checks reduce the score rather than hiding it; `*`, tinted cells, and Details expose the penalty. Raw measurements are not hidden and the verifier is not relaxed.
 
+BQSKit levels 2, 3, and 4 are labeled approx. because their stock workflows use numerical approximation, not exact symbolic equivalence. Strict QCEC acceptance is not guaranteed. Independent diagnostics on one circuit, ising_n10, seed 7, measured global-phase-aligned operator-norm distances of 8.44e-8 for level 2 on both targets, 4.79e-8 for level 3 all-to-all, and 1.14e-7 for level 4 all-to-all, compared with approximately 1e-14 for the Qiskit level 2 and BQSKit level 1 all-to-all samples. These are not campaign measurements or QCEC verdicts. The investigated stock level-2 output was not accepted by strict QCEC within the worker budget. Timed-out campaign entries remain not verified, with no completed measurement; they are N/A, not returned equivalence failures. This label does not change configurations, verification settings, measurements, scores, or ranks. Unmarked configurations are not guaranteed exact. See [BQSKit precision notes](docs/bqskit.md#numerical-approximation-and-unfinished-checks).
+
 - Six families: QFT, QAOA, Adder, Grover, VQE, Hamiltonian. Six original generated circuits plus six fixed QASMBench imports.
 - [Corpus sources and license review](docs/corpora.md); original QASM, license, parameters, and source/input hashes are retained. Expand Input details in the per-circuit view.
 - Earlier measurement snapshots and their sources/dependency locks remain in `releases/`, without links from the current site.
@@ -73,6 +75,7 @@ See [pilot protocol](docs/pilot.md) / [HTML](docs/pilot.html) for precision, map
 - `build_site.py`: static report and documentation generator.
 - `web/report.html`, `web/style.css`, `web/app.js`: editable site sources.
 - `web/theme.css`, `web/theme.js`: shared theme tokens, preference persistence, and system-theme handling.
+- [Configuration notes (display metadata)](data/configuration-notes.json): generated optional sidecar joined by configuration ID, not a complete measurement dataset. The original results bytes remain unchanged.
 - [Raw results](data/results.json), [input manifest](data/manifest.json), `data/inputs/`, `data/outputs/`.
 - [Landscape and candidates](docs/research.md) / [HTML](docs/research.html).
 - [Formal methodology proposal](docs/methodology.md) / [HTML](docs/methodology.html).

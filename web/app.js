@@ -21,6 +21,18 @@ const specFor = id => specs.find(c => c.id === id);
 const sdkFor = id => specFor(id).compiler;
 const label = id => sdkNames[sdkFor(id)] ?? sdkFor(id);
 const entryLabel = id => `${label(id)} · ${specFor(id).label}`;
+const approximationText = id => specFor(id)?.numerical_approximation ? '; approx. Numerical approximation' : '';
+const approximationTag = id => specFor(id)?.numerical_approximation
+  ? `<span class="approximation-tag" data-configuration="${esc(id)}" role="note" aria-label="Numerical approximation" aria-describedby="approximation-note">approx.</span>` : '';
+const timeoutOnly = row => row.rows?.length === row.required && row.rows.every(r => r.status === 'timeout'
+  && ![...Object.values(r.metrics ?? {}), r.compile_ms, ...(r.timing_samples_ms ?? [])].some(Number.isFinite) && !r.trials?.length);
+const timeoutExplanation = 'Worker timed out before a verified result and completed measurements were recorded. This is not a returned equivalence failure.';
+function timeoutScoreNote(row, key) {
+  const affected = row.id ? [row] : (row.rows ?? []).filter(r => r[key === 'quality' ? 'rawQuality' : 'rawSpeed'] === null);
+  return affected.length && affected.every(timeoutOnly) ? `<div>${timeoutExplanation}</div>` : '';
+}
+const approximationDetail = row => specFor(row.compiler)?.numerical_approximation
+  ? '<div>Numerical approximation. <a href="docs/bqskit.html#numerical-approximation-and-unfinished-checks">See BQSKit notes.</a></div>' : '';
 const colors = Object.fromEntries(specs.map(c => [c.id, `var(--${c.compiler})`]));
 const configurations = Object.fromEntries(specs.map(c => [c.id, c.label]));
 const referenceId = data.protocol.reference_configuration ?? 'qiskit';
@@ -186,8 +198,8 @@ function scoreExplanation(row, key) {
 function scoreContent(row, key) {
   const marked = Number.isFinite(row[key]) && row.validationRate < 1;
   const base = row[key === 'quality' ? 'rawQuality' : 'rawSpeed'];
-  const unavailable = !Number.isFinite(row[key]) ? `<details class="score-breakdown"><summary aria-label="Why is this score unavailable?">Why?</summary><div>${esc(scoreExplanation(row, key))}</div></details>` : '';
-  const detail = marked ? `<details class="score-breakdown"><summary>Details</summary><div>Before penalty: ${value(base, key)}<br>QCEC passed ${row.passSlots}/${row.requiredSlots} slots<br>Pass rate: ${(row.validationRate * 100).toFixed(1)}%<br>Score = before penalty × pass rate.</div></details>` : '';
+  const unavailable = !Number.isFinite(row[key]) ? `<details class="score-breakdown"><summary aria-label="Why is this score unavailable?">Why?</summary><div>${esc(scoreExplanation(row, key))}</div>${timeoutScoreNote(row, key)}${approximationDetail(row)}</details>` : '';
+  const detail = marked ? `<details class="score-breakdown"><summary>Details</summary><div>Before penalty: ${value(base, key)}<br>QCEC passed ${row.passSlots}/${row.requiredSlots} slots<br>Pass rate: ${(row.validationRate * 100).toFixed(1)}%<br>Score = before penalty × pass rate.</div>${approximationDetail(row)}</details>` : '';
   return `<span class="score-value">${value(row[key], key)}${marked ? '<span class="score-marker" aria-label="QCEC pass-rate penalty" aria-describedby="score-note">*</span>' : ''}</span>${detail}${unavailable}`;
 }
 function numberCell(row, key, options = {}) {
@@ -197,11 +209,11 @@ function numberCell(row, key, options = {}) {
   const penalized = scored && Number.isFinite(row[key]) && row.validationRate < 1;
   const selected = options.selected ?? state.metric === key;
   const tooltip = [scored ? scoreExplanation(row, key) : provisional ? 'Raw measurements; not all strict equivalence checks passed.' : '', samples.length ? `${samples.length} timing samples: ${Math.min(...samples).toFixed(2)} to ${Math.max(...samples).toFixed(2)} ms` : ''].filter(Boolean).join(' ');
-  const status = options.matrix && !row.complete ? `<span class="cell-sub measurement-warning">Unverified · QCEC ${row.passed}/${row.required}</span><span class="cell-sub">Measured ${row.measured}/${row.required}</span>` : options.matrix && state.columns === 'on' ? '<span class="cell-sub">QCEC passed</span>' : '';
-  return `<td class="num${selected ? ' selected-metric' : ''}${provisional ? ' unverified-metric' : ''}${penalized ? ' penalized-score' : ''}"${tooltip ? ' title="' + esc(tooltip) + '"' : ''}>${scored ? scoreContent(row, key) : value(row[key], key)}${status}</td>`;
+  const status = options.matrix && !row.complete ? `<span class="cell-sub measurement-warning">${timeoutOnly(row) ? 'Not verified' : 'Unverified'} · QCEC ${row.passed}/${row.required}</span><span class="cell-sub">${timeoutOnly(row) ? 'No measurement · ' : ''}Measured ${row.measured}/${row.required}</span>` : options.matrix && state.columns === 'on' ? '<span class="cell-sub">QCEC passed</span>' : '';
+  return `<td class="num${selected ? ' selected-metric' : ''}${provisional ? ' unverified-metric' : ''}${penalized ? ' penalized-score' : ''}"${tooltip ? ' title="' + esc(tooltip) + '"' : ''}>${scored ? scoreContent(row, key) : value(row[key], key)}${status}${options.matrix ? approximationTag(row.compiler) : ''}</td>`;
 }
 function nameCell(compiler, detailed) {
-  return `<span class="compiler-name"><i class="dot ${sdkFor(compiler)}"></i>${label(compiler)}</span>${detailed ? '<span class="sub mono">' + esc(data.environment.versions[sdkFor(compiler)]) + '</span>' : ''}<span class="sub">${esc(configurations[compiler])}</span>`;
+  return `<span class="compiler-name"><i class="dot ${sdkFor(compiler)}"></i>${label(compiler)}</span>${detailed ? '<span class="sub mono">' + esc(data.environment.versions[sdkFor(compiler)]) + '</span>' : ''}<span class="sub">${esc(configurations[compiler])} ${approximationTag(compiler)}</span>`;
 }
 function renderLeaderboard(items, compilers) {
   const rows = compilerRows(items, compilers).sort(compare);
@@ -212,9 +224,9 @@ function renderLeaderboard(items, compilers) {
     const eligible = r => Number.isFinite(r[state.metric]) && (['quality', 'speed'].includes(state.metric) || r.complete);
     const rank = eligible(row) ? 1 + rows.filter(r => eligible(r) && (metrics[state.metric].higher ? r[state.metric] > row[state.metric] : r[state.metric] < row[state.metric])).length : 'Not ranked';
     const status = row.complete ? '' : `<span class="sub measurement-warning">${row.measured ? (row.partial ? 'Partial measurements; unverified' : 'Unverified measurements') : 'No measurements'}</span>`;
-    return `<tr data-compiler="${row.compiler}"><td class="rank">${rank}</td><td>${nameCell(row.compiler, true)}${status}</td>${['quality', 'speed', 'count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? families.map(f => numberCell(row.familyScores[f], 'quality', { selected: false })).join('') : ''}<td class="num">Measured ${row.measured}/${row.rows.length}<span class="cell-sub ${row.complete ? 'valid' : ''}">QCEC ${row.passSlots}/${row.requiredSlots} slots</span></td></tr>`;
+    return `<tr data-compiler="${row.compiler}"><td class="rank">${rank}</td><td>${nameCell(row.compiler, true)}${status}</td>${['quality', 'speed', 'count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? families.map(f => numberCell({ ...row.familyScores[f], compiler: row.compiler, rows: row.rows.filter(r => r.family === f) }, 'quality', { selected: false })).join('') : ''}<td class="num">Measured ${row.measured}/${row.rows.length}<span class="cell-sub ${row.complete ? 'valid' : ''}">QCEC ${row.passSlots}/${row.requiredSlots} slots</span></td></tr>`;
   }).join('');
-  $('view-note').innerHTML = 'Quality and Speed = unpenalized performance × QCEC pass rate. Performance uses equal family weights and a measured Qiskit level 2 reference of 100; the pass rate weights each required seed slot equally. Details shows the value before penalty. Scores are experimental benchmark rules, not hardware success probabilities. Raw metrics include unverified measurements; partial coverage is labeled. N/A means a required circuit lacks measurements or reference values, not simply a failed QCEC check. Why? identifies the affected circuits; select a measured family or width to compare those configurations. <a href="docs/pilot.html">Definitions ↗</a>';
+  $('view-note').innerHTML = 'Quality and Speed = unpenalized performance × QCEC pass rate. Performance uses equal family weights and a measured Qiskit level 2 reference of 100; the pass rate weights each required seed slot equally. Details shows the value before penalty. Scores are experimental benchmark rules, not hardware success probabilities. Raw metrics include unverified measurements; partial coverage is labeled. N/A means a required circuit lacks measurements or reference values, not simply a failed QCEC check. A worker timeout means no completed measurement and no verified result, not a returned equivalence failure. Why? identifies the affected circuits; select a measured family or width to compare those configurations. The approx. tag describes numerical synthesis, not a score adjustment. <a href="docs/pilot.html">Definitions ↗</a>';
 }
 function inputDetails(id) {
   const circuit = data.cases.find(c => c.id === id);
@@ -224,15 +236,21 @@ function inputDetails(id) {
 }
 function validationDetails(row) {
   if (row.complete) return '';
-  return `<details class="input-details"><summary>Validation details</summary>${row.rows.map(r => `<div>Seed slot ${r.seed}: ${esc(r.status)}; ${esc((r.trials ?? []).map(t => t.validation.criterion).join(', '))}</div>`).join('')}</details>`;
+  const slots = row.rows.map(r => {
+    const criteria = (r.trials ?? []).map(t => t.validation.criterion).join(', ');
+    const description = [r.status === 'timeout' ? r.error : '', criteria].filter(Boolean).join('; ');
+    const missing = timeoutOnly({ rows: [r], required: 1 }) ? 'Not verified; no completed measurement.' : '';
+    return `<div>Seed slot ${r.seed}: ${esc(r.status)}; ${esc(description + (missing ? (description ? '. ' : '') + missing : ''))}</div>`;
+  }).join('');
+  return `<details class="input-details"><summary>Validation details</summary>${slots}</details>`;
 }
 function equivalenceLabel(row) {
   if (row.complete) return 'QCEC passed';
   if (row.rows.some(r => r.status === 'verification_failed' || r.trials?.some(t => !t.validation.accepted))) return 'Strict check failed';
-  return 'Incomplete checks';
+  return timeoutOnly(row) ? 'Not verified' : 'Incomplete checks';
 }
 function outputRules(row) {
-  return `<span class="${row.rulesMet ? 'valid' : 'artifact'}">${row.rulesMet ? 'Output rules met' : 'Output rules not fully checked'}</span><span class="cell-sub">Measured ${row.measured}/${row.required} slots</span>${!row.measurementComplete && row.measured ? '<span class="cell-sub measurement-warning">Partial measurements</span>' : ''}`;
+  return `<span class="${row.rulesMet ? 'valid' : 'artifact'}">${row.rulesMet ? 'Output rules met' : 'Output rules not fully checked'}</span><span class="cell-sub">${timeoutOnly(row) ? 'No measurement · ' : ''}Measured ${row.measured}/${row.required} slots</span>${!row.measurementComplete && row.measured ? '<span class="cell-sub measurement-warning">Partial measurements</span>' : ''}`;
 }
 function renderCircuits(items) {
   const detailed = state.columns === 'on';
@@ -242,11 +260,11 @@ function renderCircuits(items) {
     const artifact = row.rows.flatMap(r => r.trials ?? []).find(t => t.artifact)?.artifact;
     return `<tr data-compiler="${row.compiler}"><td><strong class="mono">${esc(row.id)}</strong><span class="sub" style="margin-left:0">${esc(row.family)} · ${row.qubits} qubits</span>${inputDetails(row.id)}</td><td>${nameCell(row.compiler, detailed)}</td>${scoreColumn ? numberCell(row, state.metric) : ''}${['count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? numberCell(row, 'one') + numberCell(row, 'total') : ''}<td>${outputRules(row)}</td><td><span class="${row.complete ? 'valid' : 'measurement-warning'}">${equivalenceLabel(row)}</span><span class="cell-sub">QCEC ${row.passed}/${row.required} slots</span>${validationDetails(row)}${artifact ? ' · <a class="artifact" href="' + esc(artifact) + '">QASM ↗</a>' : ''}</td></tr>`;
   }).join('');
-  $('view-note').textContent = 'Raw medians include every measured seed slot, regardless of strict equivalence results. Missing slots are excluded from raw medians and labeled partial. Output rules check gates, connections, and width, separately from equivalence. Quality and Speed include a QCEC pass-rate penalty, marked with *. N/A means required raw measurements or reference values are unavailable. Hover over time for the sample range. QASM opens the first recorded output.';
+  $('view-note').textContent = 'Raw medians include every measured seed slot, regardless of strict equivalence results. Missing slots are excluded from raw medians and labeled partial. Output rules check gates, connections, and width, separately from equivalence. Quality and Speed include a QCEC pass-rate penalty, marked with *. The approx. tag describes numerical synthesis and does not replace the individual QCEC result. N/A means required raw measurements or reference values are unavailable. Timed-out workers are not verified and have no completed measurements. Hover over time for the sample range. QASM opens the first recorded output.';
 }
 function renderMatrix(items, cases, compilers) {
   const metric = metrics[state.metric];
-  $('result-head').innerHTML = `<tr><th scope="col">Circuit</th><th class="num" scope="col">Qubits</th>${compilers.map(c => '<th class="num" scope="col">' + esc(entryLabel(c)) + '<small>' + esc(metric.name) + ' · ' + esc(metric.unit) + '</small></th>').join('')}</tr>`;
+  $('result-head').innerHTML = `<tr><th scope="col">Circuit</th><th class="num" scope="col">Qubits</th>${compilers.map(c => '<th class="num" scope="col">' + esc(entryLabel(c)) + ' ' + approximationTag(c) + '<small>' + esc(metric.name) + ' · ' + esc(metric.unit) + '</small></th>').join('')}</tr>`;
   $('result-rows').innerHTML = cases.map(circuit => {
     const rows = compilers.map(c => items.find(r => r.id === circuit.id && r.compiler === c));
     const eligible = r => Number.isFinite(r[state.metric]) && (['quality', 'speed'].includes(state.metric) || r.complete);
@@ -254,10 +272,10 @@ function renderMatrix(items, cases, compilers) {
     const best = available.length ? (metric.higher ? Math.max(...available) : Math.min(...available)) : null;
     return `<tr><td class="mono">${esc(circuit.id)}</td><td class="num">${circuit.qubits}</td>${rows.map(r => numberCell(r, state.metric, { selected: eligible(r) && r[state.metric] === best, matrix: true })).join('')}</tr>`;
   }).join('');
-  $('view-note').textContent = `One row per circuit. Raw values remain visible for unverified outputs. Best-value shading includes pass-rate-adjusted scores; for raw metrics it only compares fully verified outputs. Tinted * scores include a QCEC penalty. ${metric.name}: ${metric.higher ? 'higher' : 'lower'} is better. Scores are per-circuit comparisons, not suite-level scores.`;
+  $('view-note').textContent = `One row per circuit. Raw values remain visible for unverified outputs. Best-value shading includes pass-rate-adjusted scores; for raw metrics it only compares fully verified outputs. Tinted * scores include a QCEC penalty. The approx. tag is configuration metadata, not an additional penalty. N/A means no required measurement or reference value; it does not mean a returned equivalence failure. ${metric.name}: ${metric.higher ? 'higher' : 'lower'} is better. Scores are per-circuit comparisons, not suite-level scores.`;
 }
 function renderPlot(items) {
-  $('view-note').textContent = 'Each point is one compiler/circuit raw median, not a verified rank or suite score. Filled points passed all required checks; hollow points include unverified or partial measurements. No measurement means no point. Details and artifacts are in Per circuit.';
+  $('view-note').textContent = 'Each point is one compiler/circuit raw median, not a verified rank or suite score. Filled points passed all required checks; hollow points include unverified or partial measurements. No measurement means no point. The approx. tag describes numerical synthesis; point fill still shows individual verification coverage. Details and artifacts are in Per circuit.';
   const rows = items.filter(r => Number.isFinite(r.time) && Number.isFinite(r[state.y]));
   if (!rows.length) { $('chart').textContent = 'No measurements to plot.'; return; }
   const width = Math.max(300, $('chart').clientWidth), mobile = width < 650;
@@ -268,7 +286,7 @@ function renderPlot(items) {
   const ymax = Math.max(10, Math.ceil(Math.max(...rows.map(r => r[key])) / 20) * 20);
   const x = v => left + (Math.log10(Math.max(v, .001)) - lo) / (hi - lo) * (width - left - right);
   const y = v => height - bottom - v / ymax * (height - top - bottom);
-  let svg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">${metrics[key].name} versus compile time</title><desc id="chart-desc">${esc(rows.map(r => `${r.id}, ${label(r.compiler)}, ${r[key]} ${metrics[key].unit}, ${r.time.toFixed(2)} ms, ${equivalenceLabel(r)}, measured ${r.measured}/${r.required} slots`).join('; '))}</desc>`;
+  let svg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">${metrics[key].name} versus compile time</title><desc id="chart-desc">${esc(rows.map(r => `${r.id}, ${entryLabel(r.compiler)}${approximationText(r.compiler)}, ${r[key]} ${metrics[key].unit}, ${r.time.toFixed(2)} ms, ${equivalenceLabel(r)}, measured ${r.measured}/${r.required} slots`).join('; '))}</desc>`;
   for (let i = 0; i <= 4; i++) {
     const v = ymax * i / 4;
     svg += `<line x1="${left}" x2="${width - right}" y1="${y(v)}" y2="${y(v)}" stroke="#e9ecf1"/><text x="${left - 12}" y="${y(v) + 4}" text-anchor="end" fill="#818b99" font-size="10">${v}</text>`;
@@ -288,8 +306,8 @@ function renderPlot(items) {
   const occupied = [];
   const intersects = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   for (const { row, px, py } of [...points].sort((a, b) => a.py - b.py)) {
-    const description = `${row.id} / ${entryLabel(row.compiler)}: ${row[key]} ${metrics[key].unit}, ${row.time.toFixed(2)} ms; ${equivalenceLabel(row)}, QCEC ${row.passed}/${row.required}, measured ${row.measured}/${row.required} slots`;
-    svg += `<circle data-case-id="${esc(row.id)}" data-compiler="${esc(row.compiler)}" data-verified="${row.complete}" style="--point-color:${colors[row.compiler]}" class="${esc(sdkFor(row.compiler))}${row.complete ? '' : ' unverified'}" cx="${px}" cy="${py}" r="4.5" fill="${colors[row.compiler]}" stroke="white" stroke-width="1.5" tabindex="0" aria-label="${esc(description)}"><title>${esc(description)}</title></circle>`;
+    const description = `${row.id} / ${entryLabel(row.compiler)}${approximationText(row.compiler)}: ${row[key]} ${metrics[key].unit}, ${row.time.toFixed(2)} ms; ${equivalenceLabel(row)}, QCEC ${row.passed}/${row.required}, measured ${row.measured}/${row.required} slots`;
+    svg += `<circle data-case-id="${esc(row.id)}" data-compiler="${esc(row.compiler)}" data-verified="${row.complete}" style="--point-color:${colors[row.compiler]}" class="${esc(sdkFor(row.compiler))}${row.complete ? '' : ' unverified'}" cx="${px}" cy="${py}" r="4.5" fill="${colors[row.compiler]}" stroke="white" stroke-width="1.5" tabindex="0"${specFor(row.compiler)?.numerical_approximation ? ' aria-describedby="approximation-note"' : ''} aria-label="${esc(description)}"><title>${esc(description)}</title></circle>`;
     if (mobile) continue;
     const labelWidth = row.id.length * 6 + 4;
     const candidates = [8, -10, 24, -26, 40, -42].flatMap(dy => [
@@ -319,6 +337,11 @@ function render() {
   $('plot-container').hidden = !plot || !cases.length;
   $('empty').hidden = cases.length > 0;
   $('score-note').hidden = plot || !cases.length;
+  if ($('approximation-note')) {
+    const annotated = compilers.map(specFor).filter(c => c.numerical_approximation);
+    $('approximation-note').hidden = !cases.length || !annotated.length;
+    $('approximation-note-text').textContent = annotated[0]?.approximation_note ?? '';
+  }
   $('columns').disabled = plot;
   $('columns').closest('label').hidden = plot;
   $('metric').closest('.field').hidden = plot;
@@ -375,6 +398,7 @@ const fields = [
   ['Worker budget', `${data.protocol.worker_timeout_seconds} s per circuit/configuration/target/seed worker, including three compilations, checks, and startup/shutdown; not a per-compilation timeout.`],
   ...(data.protocol.timeout_retry_entries ? [['Retries', `${data.protocol.timeout_retry_entries} initial ${data.protocol.initial_worker_timeout_seconds} s timeouts retried at ${data.protocol.worker_timeout_seconds} s; ${data.results.length - data.protocol.timeout_retry_entries} completed outcomes retained. Initial results and previous attempts remain in raw data.`]] : []),
   ['Validation', data.protocol.validation],
+  ...specs.filter(c => c.numerical_approximation).map(c => ['Configuration note: ' + c.id, c.approximation_note]),
 ];
 $('environment-fields').innerHTML = fields.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
 readHash(); render();

@@ -24,6 +24,29 @@ Level numbers are not equivalent optimization budgets across SDKs. All four supp
 
 Primary sources: the [versioned standard compile implementation and parameter documentation](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/compiler/compile.py), [Compiler runtime documentation](https://bqskit.readthedocs.io/en/latest/source/autogen/bqskit.compiler.Compiler.html), [MachineModel documentation](https://bqskit.readthedocs.io/en/latest/source/autogen/bqskit.compiler.MachineModel.html), and [versioned Qiskit conversion adapter](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/ext/qiskit/translate.py).
 
+## Numerical approximation and unfinished checks
+
+| Diagnostic sample | Global-phase-aligned operator-norm distance |
+| --- | ---: |
+| Stock BQSKit level 2, ising_n10, all-to-all, seed 7 | 8.44e-8 |
+| Stock BQSKit level 2, ising_n10, line, seed 7 | 8.44e-8 |
+| Stock BQSKit level 3, ising_n10, all-to-all, seed 7 | 4.79e-8 |
+| Stock BQSKit level 4, ising_n10, all-to-all, seed 7 | 1.14e-7 |
+| Qiskit level 2, ising_n10, all-to-all, seed 7 | 2.96e-14 |
+| BQSKit level 1, ising_n10, all-to-all, seed 7 | 1.59e-14 |
+
+These are independent diagnostics on one circuit and one seed, with wire maps accounted for. They are not campaign measurements, QCEC verdicts, corpus-wide error bounds, or a guarantee that level 1 is exact. Levels 2, 3, and 4 are labeled approx.; level 1 is not labeled. Absence of the label does not guarantee exact equivalence.
+
+Stock level 2 ends with gate-deletion optimization. In BQSKit 1.2.1, ScanningGateRemovalPass removes a candidate gate, re-instantiates the remaining parameters, and accepts the candidate when its scalar cost is below success_threshold. Atlas sets this threshold through synthesis_epsilon=1e-12. The acceptance branch does not independently check a unitary-difference norm. In the investigated sample, the first accepted removal had cost 0.0 but operator-norm distance 1.516e-8; the final output distance was 8.44e-8. The internal threshold therefore must not be interpreted as a 1e-12 whole-circuit distance guarantee.
+
+Levels 3 and 4 use the same deletion pass with iterative numerical resynthesis; level 4 also uses permutation-aware synthesis and mapping. Their observed residuals are not attributed to a single deletion step: no pass-level bisect was performed for those levels.
+
+The unchanged QCEC alternating checker did not finish on the investigated level-2 output within the bounded diagnostic runs. Its configured 20-second timeout was not a strict wall-clock cap. The recorded campaign has 18 worker timeouts on ising_n10 across levels 2, 3, and 4. Those workers retained no completed measurements and remain not verified, with N/A metrics. They are not recorded not_equivalent verdicts. The identical stopping path has not been established for all 18 workers.
+
+The approx. label explains a property of the stock numerical configuration, not a verifier change. Strict QCEC acceptance is not guaranteed. The strict QCEC trace/identity threshold remains 1e-8. The operator-norm distances above are a different diagnostic quantity and do not themselves constitute QCEC verdicts or mathematical proofs. Completed verification-failed outputs retain their original criteria, measurements, and pass-rate penalties. These diagnostics do not establish the cause of the 111 completed BQSKit verification failures. The annotation changes no score or rank. [Configuration notes (display metadata)](../data/configuration-notes.json) are a generated optional sidecar, not a replacement for raw results.
+
+Versioned sources: [scan acceptance branch](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/passes/processing/scan.py#L128-L135), [deletion and resynthesis builders](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/compiler/compile.py#L1344-L1415), [level-2 workflow](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/compiler/compile.py#L1462-L1512), [level-3 workflow](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/compiler/compile.py#L1515-L1575), and [level-4 workflow](https://github.com/BQSKit/bqskit/blob/1.2.1/bqskit/compiler/compile.py#L1578-L1639).
+
 ## Timing boundary and process lifecycle
 
 Input conversion and local runtime startup/shutdown are outside the compile timer. A fresh local runtime is created for every repetition. The measured interval includes MachineModel construction, standard workflow construction, submission, execution, and result retrieval. Output conversion, export, metrics, and QCEC are outside the timer.

@@ -31,6 +31,42 @@ const leaderQuality = leaderBase * selectedRows.filter(slotPassed).length / (sel
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  assert.equal(await page.evaluate(() => {
+    const timeout = { status: 'timeout', error: '600 s worker budget exceeded' };
+    const row = { rows: [timeout, timeout, timeout], required: 3, measured: 0, passed: 0, complete: false, rawQuality: null, quality: null, id: 'fixture' };
+    if (equivalenceLabel(row) !== 'Not verified' || !timeoutScoreNote(row, 'quality').includes('not a returned equivalence failure')) return false;
+    for (const rows of [[timeout, timeout], [{ status: 'error' }, timeout, timeout], [{ ...timeout, metrics: { one_qubit_count: 1 } }, timeout, timeout]]) {
+      const fixture = { ...row, rows };
+      if (equivalenceLabel(fixture) !== 'Incomplete checks' || timeoutScoreNote(fixture, 'quality')) return false;
+    }
+    const failed = { ...row, rows: [{ status: 'verification_failed', trials: [{ validation: { accepted: false, criterion: 'no_information' } }] }, timeout, timeout] };
+    if (equivalenceLabel(failed) !== 'Strict check failed' || !validationDetails(failed).includes('no_information')) return false;
+    const savedTrial = { ...failed, rows: [{ ...failed.rows[0], status: 'timeout', error: 'fixture budget exceeded', metrics: { two_qubit_count: 1 } }] };
+    if (!validationDetails(savedTrial).includes('no_information') || !validationDetails(savedTrial).includes('fixture budget exceeded') || validationDetails(savedTrial).includes('no completed measurement')) return false;
+    const measured = { ...row, rows: [{ status: 'passed', metrics: { two_qubit_count: 1 } }], required: 1 };
+    return timeoutScoreNote(measured, 'quality') === '';
+  }), true, 'Only full timeout-only unmeasured slots get timeout wording; mixed/error/failure/reference-only missing cases retain their meanings');
+  for (const target of ['line', 'all-to-all']) {
+    for (const view of ['circuits', 'matrix', 'tradeoff']) {
+      await page.goto(url + `#view=${view}&family=Hamiltonian&compiler=bqskit&target=${target}`);
+      if (view === 'tradeoff') {
+        for (const id of ['bqskit-l2', 'bqskit-l3', 'bqskit-l4']) assert.equal(await page.locator(`#chart circle[data-compiler="${id}"]`).count(), 0);
+      } else {
+        const content = await page.locator('#result-rows').innerText();
+        assert.match(content, /Not verified/);
+        assert.match(content, /No measurement/);
+        assert.doesNotMatch(content, /Strict check failed/);
+        if (view === 'circuits') {
+          const timeouts = page.locator('#result-rows tr[data-compiler="bqskit-l2"]');
+          await timeouts.getByText('Validation details', { exact: true }).click();
+          assert.match(await timeouts.innerText(), /600 s worker budget exceeded\. Not verified; no completed measurement\./);
+          await timeouts.locator('.score-breakdown summary').click();
+          assert.match(await timeouts.innerText(), /This is not a returned equivalence failure\./);
+        }
+      }
+    }
+  }
   await page.goto(url + '#view=circuits&family=QFT&width=4&compiler=bqskit&metric=count');
   await page.selectOption('#configuration', bqId);
   await page.evaluate(id => { window.testBQId = id; }, bqId);

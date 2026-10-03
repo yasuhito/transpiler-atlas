@@ -14,6 +14,20 @@ def inputs(tmp_path, monkeypatch):
     return atlas.generate_inputs()
 
 
+def test_display_annotations_are_separate_from_execution_registry():
+    annotations = atlas.configuration_annotations()
+    assert set(annotations) == {"bqskit-l2", "bqskit-l3", "bqskit-l4"}
+    for identifier, note in annotations.items():
+        assert note["numerical_approximation"] is True
+        assert "Strict QCEC acceptance is not guaranteed." in note["approximation_note"]
+        assert identifier in {c["id"] for c in atlas.CONFIGURATIONS}
+    raw = json.loads((atlas.ROOT / "data/results.json").read_text())
+    assert raw["protocol"]["configurations"] == atlas.CONFIGURATIONS
+    assert all("numerical_approximation" not in c for c in atlas.CONFIGURATIONS)
+    annotations["bqskit-l2"]["approximation_note"] = "changed copy"
+    assert atlas.configuration_annotations() != annotations
+
+
 def test_configuration_registry_has_supported_levels_and_fixed_reference():
     assert len({c["id"] for c in atlas.CONFIGURATIONS}) == 11
     assert [c["optimization_level"] for c in atlas.CONFIGURATIONS if c["compiler"] == "qiskit"] == [

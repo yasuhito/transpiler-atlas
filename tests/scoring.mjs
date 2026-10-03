@@ -43,6 +43,40 @@ try {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   const url = pathToFileURL(path.resolve('index.html')).href;
   await page.goto(url);
+  const metadataInvariant = await page.evaluate(() => {
+    const saved = specs.map(c => ({ ...c }));
+    const snapshot = () => {
+      const output = [];
+      for (const target of enums.target) for (const family of enums.family) for (const width of enums.width) {
+        const cases = data.cases.filter(c => (family === 'all' || c.family === family) && (width === 'all' || String(c.qubits) === width));
+        if (!cases.length) continue;
+        Object.assign(state, { target, family, width });
+        const items = scoreCases(aggregate(cases));
+        const summary = compilerRows(items, compilerIds);
+        output.push(items.map(({ rows, ...r }) => r), summary.map(({ rows, ...r }) => r));
+        for (const metric of Object.keys(metrics)) {
+          state.metric = metric;
+          renderLeaderboard(items, compilerIds);
+          output.push([...document.querySelectorAll('#result-rows tr')].map(n => [n.dataset.compiler, n.querySelector('.rank').textContent]));
+          renderMatrix(items, cases, compilerIds);
+          output.push([...document.querySelectorAll('#result-rows td')].map(n => [n.className, n.querySelector('.score-value')?.textContent ?? null]));
+        }
+        for (const y of ['count', 'depth']) {
+          state.y = y;
+          renderPlot(items);
+          output.push([...document.querySelectorAll('#chart circle')].map(n => ['data-case-id', 'data-compiler', 'data-verified', 'cx', 'cy', 'class', 'fill'].map(k => n.getAttribute(k))));
+        }
+      }
+      return JSON.stringify(output);
+    };
+    const annotated = snapshot();
+    for (const c of specs) { delete c.numerical_approximation; delete c.approximation_note; }
+    const unannotated = snapshot();
+    specs.forEach((c, i) => Object.assign(c, saved[i]));
+    Object.assign(state, defaults); render();
+    return annotated === unannotated;
+  });
+  assert.equal(metadataInvariant, true, 'Annotations must not affect scores, ranks, shading, penalties, slots, N/A, coverage, or plot geometry/fill');
   const cell = (compiler, key) => page.locator(`#result-rows tr[data-compiler="${entryId(compiler)}"] td`).nth(key === 'quality' ? 2 : 3);
   await page.evaluate(id => { window.testBQId = id; }, entryId('bqskit'));
   const initial = expected('line', 'all', 'bqskit', 'quality');

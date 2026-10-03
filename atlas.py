@@ -72,6 +72,26 @@ CONFIGURATIONS = [
 ]
 
 
+# Display-only metadata. Never merge into the execution registry above.
+CONFIGURATION_ANNOTATIONS = {
+    f"bqskit-l{level}": {
+        "numerical_approximation": True,
+        "approximation_note": (
+            "Numerical approximation in the stock BQSKit workflow. "
+            "Strict QCEC acceptance is not guaranteed. "
+            "The investigated ising_n10 output was not accepted within the worker budget. "
+            "Individual check results, measurements, and scores are unchanged."
+        ),
+    }
+    for level in (2, 3, 4)
+}
+
+
+def configuration_annotations() -> dict:
+    """Return independent display notes without modifying execution settings."""
+    return {identifier: dict(note) for identifier, note in CONFIGURATION_ANNOTATIONS.items()}
+
+
 def configuration_for(identifier: str) -> dict:
     # Keep the previous adapter entry points usable by existing pipeline tests.
     identifier = {"qiskit": "qiskit-l2", "pytket": "pytket-peephole", "bqskit": "bqskit-l1"}.get(

@@ -59,12 +59,13 @@
         <div id="chart"></div><p class="plot-note">Lower left is better. Compile time uses a logarithmic axis. Dotted lines pair the same circuit across compilers. Filled points: all QCEC checks passed. Hollow points: unverified or partial measurements.</p>
       </div>
       <p id="score-note" class="score-note">* QCEC checks failed or are missing for some required seed slots. Scores include a pass-rate penalty; Details shows the score before penalty and the check counts.</p>
+      <p id="approximation-note" class="approximation-note" hidden><span class="approximation-tag">approx.</span> <span id="approximation-note-text"></span> <a href="docs/bqskit.html#numerical-approximation-and-unfinished-checks">BQSKit precision notes ↗</a></p>
       <p id="view-note" class="view-note"></p>
       <div id="empty" class="empty" hidden>No measured circuits match these filters. <button id="empty-reset" class="text-button">Reset filters</button></div>
     </section>
 
     <details id="environment" class="run-details"><summary>Run configuration and interpretation</summary><div class="details-grid"><div><h2>Measurement</h2><dl id="environment-fields"></dl></div><div><h2>Interpretation</h2><ul><li>Quality combines 2Q count and 2Q depth. Scores use equal family weights and the same run's Qiskit level 2 baseline of 100.</li><li>Speed uses a 1 ms floor. Quality and Speed scores equal the unpenalized performance score multiplied by the QCEC pass rate. Asterisks and tinted cells mark pass-rate penalties. This is a benchmark rule, not a hardware success probability. Raw measurements remain visible; N/A means required measurements or reference values are unavailable.</li><li>Each row is one SDK/configuration pair. Level numbers are SDK-specific, not comparable effort units. pytket Basic and Peephole repeat the same unseeded pipeline; Pauli + peephole uses the scheduled seed.</li><li>Timing includes pipeline construction and compilation. Parsing, export, conversion for validation, QCEC, and BQSKit local runtime startup/shutdown are excluded.</li><li>No enforced memory cap, exclusive host, or CPU frequency control. A first-use cost can enter the first of three timing repetitions.</li></ul><a href="docs/pilot.html">Full pilot protocol ↗</a></div></div></details>
-    <footer><span id="footer-meta"></span><div><a href="data/manifest.json">Input manifest</a><a href="data/results.json">Raw JSON</a></div></footer>
+    <footer><span id="footer-meta"></span><div><a href="data/manifest.json">Input manifest</a><a href="data/results.json">Raw JSON</a><a href="data/configuration-notes.json">Configuration notes (display metadata)</a></div></footer>
     <noscript><p>JavaScript is required for interactive results. <a href="data/results.json">Download the raw data</a>.</p></noscript>
   </main>
   <script id="benchmark-data" type="application/json">__BENCHMARK_DATA__</script>

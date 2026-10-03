@@ -8,17 +8,53 @@ from pathlib import Path
 
 import markdown
 
+from atlas import configuration_annotations
+
 ROOT = Path(__file__).resolve().parent
 SCORE_VERSION = "qcec-adjusted-v1"
 
 
-def build() -> None:
-    data = json.loads((ROOT / "data/results.json").read_text())
+def display_data(data: dict, annotations: dict | None = None) -> tuple[dict, dict]:
+    """Overlay explanatory fields on a copy, leaving campaign records untouched."""
+    notes = configuration_annotations() if annotations is None else annotations
     display = copy.deepcopy(data)
     display["score_version"] = SCORE_VERSION
+    configurations = display["protocol"].get("configurations", [])
+    ids = [configuration["id"] for configuration in configurations]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Duplicate configuration ID")
+    if notes.keys() - set(ids):
+        # Historical SDK-only fixtures have no configuration annotations.
+        if annotations is not None or configurations or "configurations" in display["protocol"]:
+            raise ValueError("Unknown annotation configuration ID")
+        notes = {}
+    for identifier, note in notes.items():
+        if set(note) != {"numerical_approximation", "approximation_note"}:
+            raise ValueError("Only display annotation fields are allowed")
+        if (
+            note["numerical_approximation"] is not True
+            or not isinstance(note["approximation_note"], str)
+            or not note["approximation_note"].strip()
+        ):
+            raise ValueError("Invalid configuration annotation")
+        next(c for c in configurations if c["id"] == identifier).update(note)
+    sidecar = {
+        "suite": data["suite"],
+        "score_version": SCORE_VERSION,
+        "protocol": {"configurations": [{"id": key, **note} for key, note in notes.items()]},
+    }
     for row in display["results"]:
         for trial in row.get("trials", []):
             trial["validation"].pop("details", None)
+    return display, sidecar
+
+
+def build() -> None:
+    data = json.loads((ROOT / "data/results.json").read_text())
+    display, sidecar = display_data(data)
+    (ROOT / "data/configuration-notes.json").write_text(
+        json.dumps(sidecar, ensure_ascii=False, indent=2) + "\n"
+    )
     payload = json.dumps(display, ensure_ascii=False).replace("<", "\\u003c")
     template = (ROOT / "web/report.html").read_text()
     if template.count("__BENCHMARK_DATA__") != 1:
