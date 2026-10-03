@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Quantum transpiler benchmark results by compiler, circuit, topology, and metric.">
+  <title>Transpiler Atlas | Benchmark results</title>
+  <script src="web/theme.js"></script>
+  <link rel="stylesheet" href="web/theme.css">
+  <link rel="stylesheet" href="web/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to results</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">T</span>Transpiler Atlas</a>
+      <nav aria-label="Main navigation">
+        <a href="index.html" aria-current="page">Results</a>
+        <a href="docs/pilot.html">Protocol</a>
+        <a href="docs/methodology.html">Scoring</a>
+        <a href="docs/research.html">Sources</a>
+        <a href="data/results.json" download>Data <span aria-hidden="true">↗</span></a>
+      </nav>
+      <label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label>
+    </div>
+  </header>
+  <main id="main">
+    <div class="page-heading">
+      <h1>Benchmark results</h1>
+      <div class="release"><span class="badge">Pilot v0.3</span><span id="score-version" class="badge"></span><span id="updated"></span></div>
+    </div>
+    <p class="dataset-meta" id="dataset-meta"></p>
+    <p class="pilot-note">Exploratory results, not a formal ranking. Shared host, small circuits, one CPU core. <a href="docs/pilot.html">Evaluation details ↗</a></p>
+
+    <div class="views" role="tablist" aria-label="Result view">
+      <button id="tab-leaderboard" role="tab" aria-controls="result-panel" aria-selected="true" data-view="leaderboard">Leaderboard</button>
+      <button id="tab-circuits" role="tab" aria-controls="result-panel" aria-selected="false" data-view="circuits" tabindex="-1">Per circuit</button>
+      <button id="tab-matrix" role="tab" aria-controls="result-panel" aria-selected="false" data-view="matrix" tabindex="-1">Matrix</button>
+      <button id="tab-tradeoff" role="tab" aria-controls="result-panel" aria-selected="false" data-view="tradeoff" tabindex="-1">Trade-off</button>
+    </div>
+    <section class="controls" aria-label="Result filters">
+      <div class="control-row">
+        <div class="field"><label for="target">Topology</label><select id="target"><option value="line">Line</option><option value="all-to-all">All-to-all</option></select></div>
+        <div class="field"><label for="width">Qubits</label><select id="width"><option value="all">All widths</option><option value="4">4 qubits</option><option value="6">6 qubits</option><option value="8">8 qubits</option></select></div>
+        <div class="field"><label for="compiler">Compiler</label><select id="compiler"><option value="all">All compilers</option><option value="qiskit">Qiskit</option><option value="pytket">pytket</option></select></div>
+        <div class="field"><label for="metric">Metric / order</label><select id="metric"><option value="quality">Quality score ↓</option><option value="speed">Speed score ↓</option><option value="count">2Q count ↑</option><option value="depth">2Q depth ↑</option><option value="time">Compile time ↑</option></select></div>
+        <div class="control-actions"><button id="reset" class="text-button">Reset</button><a id="permalink" href="#">Permalink ↗</a></div>
+      </div>
+      <div class="category-row"><span class="control-label">Circuit</span><div class="categories" role="group" aria-label="Circuit family"><button data-family="all" aria-pressed="true">All</button><button data-family="QFT" aria-pressed="false">QFT</button><button data-family="QAOA" aria-pressed="false">QAOA</button><button data-family="Adder" aria-pressed="false">Adder</button></div><label class="column-toggle"><input id="columns" type="checkbox" checked>Detailed columns</label></div>
+      <p id="target-note" class="target-note"></p>
+    </section>
+
+    <section id="result-panel" role="tabpanel" aria-labelledby="tab-leaderboard" tabindex="0">
+      <div class="result-toolbar"><p id="selection-status" role="status" aria-live="polite"></p><span id="metric-direction"></span></div>
+      <div id="table-container" class="table-scroll" role="region" aria-label="Benchmark table" tabindex="0"><table id="results-table"><caption class="sr-only">Compiler benchmark results for the selected filters</caption><thead id="result-head"></thead><tbody id="result-rows"></tbody></table></div>
+      <div id="plot-container" hidden>
+        <div class="plot-tools"><div class="field"><label for="plot-y">Vertical axis</label><select id="plot-y"><option value="count">2Q gate count</option><option value="depth">2Q depth</option></select></div><div class="legend"><span><i class="dot qiskit"></i>Qiskit</span><span><i class="dot pytket"></i>pytket</span></div></div>
+        <div id="chart"></div><p class="plot-note">Lower left is better. Compile time uses a logarithmic axis. Dotted lines pair the same circuit across compilers. Filled points: all QCEC checks passed. Hollow points: unverified or partial measurements.</p>
+      </div>
+      <p id="score-note" class="score-note">* QCEC checks failed or are missing for some required seed slots. Scores include a pass-rate penalty; Details shows the score before penalty and the check counts.</p>
+      <p id="view-note" class="view-note"></p>
+      <div id="empty" class="empty" hidden>No measured circuits match these filters. <button id="empty-reset" class="text-button">Reset filters</button></div>
+    </section>
+
+    <details id="environment" class="run-details"><summary>Run configuration and interpretation</summary><div class="details-grid"><div><h2>Measurement</h2><dl id="environment-fields"></dl></div><div><h2>Interpretation</h2><ul><li>Quality combines 2Q count and 2Q depth. Scores use equal family weights and the same run's Qiskit baseline of 100.</li><li>Speed uses a 1 ms floor. Quality and Speed scores equal the unpenalized performance score multiplied by the QCEC pass rate. Asterisks and tinted cells mark pass-rate penalties. This is a benchmark rule, not a hardware success probability. Raw measurements remain visible; N/A means required measurements or reference values are unavailable.</li><li>pytket does not accept the seed in this pipeline. Its three seed slots are repeated measurements, not independent seeded configurations.</li><li>Timing includes pipeline construction and compilation. Parsing, export, conversion for validation, QCEC, and BQSKit local runtime startup/shutdown are excluded.</li><li>No enforced memory cap, exclusive host, or CPU frequency control. A first-use cost can enter the first of three timing repetitions.</li></ul><a href="docs/pilot.html">Full pilot protocol ↗</a></div></div></details>
+    <footer><span id="footer-meta"></span><div><a href="data/manifest.json">Input manifest</a><a href="data/results.json">Raw JSON</a></div></footer>
+    <noscript><p>JavaScript is required for interactive results. <a href="data/results.json">Download the raw data</a>.</p></noscript>
+  </main>
+  <script id="benchmark-data" type="application/json">__BENCHMARK_DATA__</script>
+  <script src="web/app.js"></script>
+</body>
+</html>

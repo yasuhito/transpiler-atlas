@@ -5,6 +5,10 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 const raw = JSON.parse(fs.readFileSync('data/results.json', 'utf8'));
+const bqId = raw.protocol.configurations ? 'bqskit-l1' : 'bqskit';
+const refId = raw.protocol.reference_configuration ?? 'qiskit';
+const ids = raw.protocol.configurations?.map(c => c.id) ?? raw.protocol.compilers;
+const recordId = r => r.configuration_id ?? r.compiler;
 const url = pathToFileURL(path.resolve('index.html')).href;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true });
 const median = values => {
@@ -13,21 +17,23 @@ const median = values => {
   const n = Math.floor(xs.length / 2);
   return xs.length % 2 ? xs[n] : (xs[n - 1] + xs[n]) / 2;
 };
-const samples = raw.results.filter(r => r.target === 'line' && r.compiler === 'bqskit' && r.case_id === 'qft-4q');
+const samples = raw.results.filter(r => r.target === 'line' && recordId(r) === bqId && r.case_id === 'qft-4q');
 const expected = rows => [median(rows.map(r => r.metrics?.two_qubit_count)), median(rows.map(r => r.metrics?.two_qubit_depth)), median(rows.map(r => r.compile_ms))];
 const displayed = values => values.map((v, i) => v === null ? 'N/A' : i === 2 ? v.toFixed(2) : String(v));
 const slotPassed = r => r.status === 'passed' && r.trials?.length === raw.protocol.timing_repeats && r.trials.every(t => t.validation.accepted);
-const reference = id => raw.results.filter(r => r.target === 'line' && r.compiler === 'qiskit' && r.case_id === id);
+const reference = id => raw.results.filter(r => r.target === 'line' && recordId(r) === refId && r.case_id === id);
 const rawQuality = (rows, ref) => 100 * Math.sqrt((median(ref.map(r => r.metrics.two_qubit_count)) + 1) / (median(rows.map(r => r.metrics.two_qubit_count)) + 1) * (median(ref.map(r => r.metrics.two_qubit_depth)) + 1) / (median(rows.map(r => r.metrics.two_qubit_depth)) + 1));
 const qualityText = rows => (rawQuality(rows, reference('qft-4q')) * rows.filter(slotPassed).length / raw.protocol.seeds.length).toFixed(1) + '*';
 const selectedCases = raw.cases.filter(c => c.family === 'QFT' && c.qubits === 4);
-const selectedRows = raw.results.filter(r => selectedCases.some(c => c.id === r.case_id) && r.target === 'line' && r.compiler === 'bqskit');
+const selectedRows = raw.results.filter(r => selectedCases.some(c => c.id === r.case_id) && r.target === 'line' && recordId(r) === bqId);
 const leaderBase = Math.exp(selectedCases.reduce((n, c) => n + Math.log(rawQuality(selectedRows.filter(r => r.case_id === c.id), reference(c.id))), 0) / selectedCases.length);
 const leaderQuality = leaderBase * selectedRows.filter(slotPassed).length / (selectedCases.length * raw.protocol.seeds.length);
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(url + '#view=circuits&family=QFT&width=4&compiler=bqskit&metric=count');
+  await page.selectOption('#configuration', bqId);
+  await page.evaluate(id => { window.testBQId = id; }, bqId);
   const row = () => page.locator('#result-rows tr').filter({ hasText: 'qft-4q' });
   const cells = () => row().locator('td');
   // The reported issue: genuine measurements disappeared when strict checks failed.
@@ -46,7 +52,7 @@ try {
   await page.screenshot({ path: '/tmp/transpiler-atlas-qft-raw.png', fullPage: true });
 
   await page.getByRole('tab', { name: 'Leaderboard', exact: true }).click();
-  const leader = () => page.locator('#result-rows tr[data-compiler="bqskit"]');
+  const leader = () => page.locator(`#result-rows tr[data-compiler="${bqId}"]`);
   assert.equal(await leader().locator('td').nth(2).locator('.score-value').innerText(), leaderQuality.toFixed(1) + '*');
   for (const i of [4, 5, 6]) assert.notEqual(await leader().locator('td').nth(i).innerText(), 'N/A');
   assert.match(await leader().innerText(), /Unverified measurements/);
@@ -60,7 +66,7 @@ try {
   assert.equal(await matrix().locator('td.selected-metric').count(), 0);
 
   await page.getByRole('tab', { name: 'Trade-off', exact: true }).click();
-  const point = () => page.locator('#chart circle[data-case-id="qft-4q"][data-compiler="bqskit"]');
+  const point = () => page.locator(`#chart circle[data-case-id="qft-4q"][data-compiler="${bqId}"]`);
   assert.equal(await point().count(), 1);
   assert.equal(await point().getAttribute('data-verified'), 'false');
   assert.ok((await point().getAttribute('class')).includes('unverified'));
@@ -70,7 +76,7 @@ try {
   // A genuine missing worker result must not discard other measured seed slots.
   await page.evaluate(() => {
     window.savedResults = JSON.parse(JSON.stringify(data.results));
-    const row = data.results.find(r => r.target === 'line' && r.compiler === 'bqskit' && r.case_id === 'qft-4q' && r.seed === 7);
+    const row = data.results.find(r => r.target === 'line' && (r.configuration_id ?? r.compiler) === window.testBQId && r.case_id === 'qft-4q' && r.seed === 7);
     for (const key of ['metrics', 'compile_ms', 'timing_samples_ms', 'trials']) delete row[key];
     row.status = 'timeout';
     state.view = 'circuits'; state.metric = 'count'; render();
@@ -86,33 +92,33 @@ try {
   // Raw measurement availability must not grant a verified rank or best-cell shading.
   await page.evaluate(() => {
     data.results = JSON.parse(JSON.stringify(window.savedResults));
-    for (const r of data.results.filter(r => r.target === 'line' && r.case_id === 'qft-4q' && r.compiler === 'bqskit')) {
+    for (const r of data.results.filter(r => r.target === 'line' && r.case_id === 'qft-4q' && (r.configuration_id ?? r.compiler) === window.testBQId)) {
       r.metrics.two_qubit_count = 0;
     }
-    state.compiler = 'all'; state.metric = 'count'; state.view = 'matrix'; render();
+    state.compiler = 'all'; state.configuration = 'all'; state.metric = 'count'; state.view = 'matrix'; render();
   });
-  const bqCell = matrix().locator('td').last();
+  const bqCell = matrix().locator('td').nth(2 + ids.indexOf(bqId));
   assert.ok((await bqCell.innerText()).startsWith('0'));
   assert.equal(await bqCell.evaluate(n => n.classList.contains('selected-metric')), false);
   await page.getByRole('tab', { name: 'Leaderboard', exact: true }).click();
   assert.equal(await leader().locator('td').first().innerText(), 'Not ranked');
-  assert.equal(await page.locator('#result-rows tr[data-compiler="qiskit"] td').first().innerText(), '1');
+  assert.match(await page.locator(`#result-rows tr[data-compiler="${refId}"] td`).first().innerText(), /^\d+$/);
 
   // If no numbers were recorded, N/A is appropriate and no point is invented.
   await page.evaluate(() => {
     data.results = JSON.parse(JSON.stringify(window.savedResults));
-    for (const r of data.results.filter(r => r.target === 'line' && r.case_id === 'qft-4q' && r.compiler === 'bqskit')) {
+    for (const r of data.results.filter(r => r.target === 'line' && r.case_id === 'qft-4q' && (r.configuration_id ?? r.compiler) === window.testBQId)) {
       for (const key of ['metrics', 'compile_ms', 'timing_samples_ms', 'trials']) delete r[key];
       r.status = 'error';
     }
-    state.compiler = 'bqskit'; state.view = 'circuits'; state.metric = 'count'; render();
+    state.compiler = 'bqskit'; state.configuration = window.testBQId; state.view = 'circuits'; state.metric = 'count'; render();
   });
   for (const i of [2, 3, 4]) assert.equal(await cells().nth(i).innerText(), 'N/A');
   assert.match(await row().innerText(), /Measured 0\/3/);
   await page.getByRole('tab', { name: 'Trade-off', exact: true }).click();
   assert.equal(await point().count(), 0);
   await page.evaluate(() => {
-    for (const r of data.results.filter(r => r.target === 'line' && r.family === 'QFT' && r.qubits === 4 && r.compiler === 'bqskit')) {
+    for (const r of data.results.filter(r => r.target === 'line' && r.family === 'QFT' && r.qubits === 4 && (r.configuration_id ?? r.compiler) === window.testBQId)) {
       for (const key of ['metrics', 'compile_ms', 'timing_samples_ms', 'trials']) delete r[key];
       r.status = 'error';
     }

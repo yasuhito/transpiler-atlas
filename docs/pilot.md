@@ -1,4 +1,4 @@
-# Pilot v0.3: protocol and limitations
+# Pilot v0.4: configurations, protocol, and limitations
 
 This is an end-to-end feasibility experiment, not the formal suite v1 proposed in the methodology. It tests compilation, output constraints, and equivalence with input/output wire maps taken into account.
 
@@ -6,7 +6,7 @@ This is an end-to-end feasibility experiment, not the formal suite v1 proposed i
 
 ```bash
 uv sync --frozen
-uv run python atlas.py run --overwrite
+uv run python atlas.py run --overwrite  # fresh full matrix, 600-second workers
 uv run python build_site.py
 uv run pytest -q
 uv run ruff check .
@@ -48,27 +48,50 @@ This is a **common low-level input track**, not a generator-independent high-lev
 
 Earlier published measurement snapshots and their source/dependency trees are retained in the repository under `releases/`, but are not linked from the current site. Current results are a new measurement of all 12 cases, not a merge of old and new timings. Cross-release absolute timing comparisons are not controlled comparisons.
 
-The runner refuses a suite change without a matching archived results file. Repeating v0.3 requires `--overwrite`; preserve another snapshot first if the rerun must remain available. Tests generate inputs in temporary directories rather than changing published inputs.
+The runner refuses a suite change without a matching archived results file. Repeating v0.4 requires `--overwrite`; preserve another snapshot first if the rerun must remain available. v0.3 is retained as a standalone snapshot, without an active site link. Tests generate inputs in temporary directories rather than changing published inputs.
+
+For a long fresh batch, redirect stdout to a JSON-lines log. `atlas.py run --resume-log <log>` can continue a saved contiguous schedule prefix after interruption, provided inputs, code/settings, dependencies, and host conditions are unchanged. Resume checks the scheduled job identities and artifact availability, not arbitrary changes to compilation settings. The published campaign resumed after 619 entries; completed outputs were retained rather than remeasured.
 
 ## Target and pipelines
 
 The physical width equals the input's total width. Targets are fully connected or linear, with bidirectional CX, the native basis `rz,sx,x,cx`, and no added workspace. These are Atlas-designed synthetic test conditions, not a named hardware device, a QASMBench requirement, or an adopted standard benchmark specification. All-to-all isolates compilation without connectivity restrictions; a line exercises placement and routing when only neighboring wires can interact. The source of this choice is the Atlas methodology proposal, not the input corpus. This differs from the proposed 32-physical-qubit suite v1 targets.
 
-- **Qiskit:** preset level 2, `approximation_degree=1.0`, seeds 7/19/43.
-- **pytket:** `FullPeepholeOptimise(allow_swaps=False)` → `DefaultMappingPass` using GraphPlacement → `SynthesiseTket` → `AutoRebase(rz,sx,x,cx,allow_swaps=False)`.
-- **BQSKit:** standard level 1 `compile`, two-qubit maximum synthesis size, `synthesis_epsilon=1e-12`, explicit MachineModel for the shared target/basis, `with_mapping=True`, seeds 7/19/43, one local worker and one BLAS thread. [Adapter settings and numerical limitations](bqskit.md).
+Each ranking entry is one **SDK/configuration pair**, not one SDK. The 11 configurations are recorded in `protocol.configurations`; each result carries both `compiler` (SDK) and `configuration_id`. Schema version 2 uses `(case_id, configuration_id, target, seed)` as the unique entry key. Artifact filenames include the configuration ID.
 
-The pytket pipeline is explicit and specific to this experiment, not a claim about the default recommended pipeline for all backends. No seed is passed to this pipeline. Its three seed slots are repeated measurements, not three independently seeded configurations.
+| SDK | Separate entries | Shared settings |
+| --- | --- | --- |
+| Qiskit | Native preset levels **0, 1, 2, 3** | `approximation_degree=1.0`, shared native basis/coupling, seeds 7/19/43 |
+| pytket | **Basic synthesis**, **Peephole**, **Pauli + peephole** | Explicit recipes followed by the same mapping/rebase suffix |
+| BQSKit | Native compile levels **1, 2, 3, 4** | `max_synthesis_size=2`, `synthesis_epsilon=1e-12`, shared MachineModel, returned maps, one worker/BLAS thread, seeds 7/19/43 |
+
+Qiskit level 0 is available; BQSKit level 0 is not. Levels are native SDK choices, **not equal effort units across SDKs**, and a higher number is not a guarantee of better measured output. BQSKit's two-qubit synthesis-block cap does not change the full input circuit width. [BQSKit settings and limitations](bqskit.md).
+
+The pytket entries are Atlas recipes, not official universal optimization levels:
+
+- Basic: `SynthesiseTket()`.
+- Peephole: `FullPeepholeOptimise(allow_swaps=False)`.
+- Pauli + peephole: `GreedyPauliSimp(seed=slot, thread_timeout=5, trials=1, only_reduce=True)` then `FullPeepholeOptimise(allow_swaps=False)`.
+- Every recipe then applies `DefaultMappingPass(Architecture(edges))` using GraphPlacement, `SynthesiseTket()`, and `AutoRebase(rz,sx,x,cx,allow_swaps=False)`.
+
+Basic and Peephole are unseeded: their three seed slots repeat the same pipeline. Pauli uses the scheduled seed for candidate selection. Its internal five-second search timeout is an algorithm setting, distinct from the worker's 600-second wall budget. GreedyPauliSimp does not preserve global phase; the unchanged verifier accepts equivalence up to global phase. These recipes are not claimed to be the recommended backend defaults.
 
 ## Timing and environment
 
-12 circuits in six families × 2 targets × 3 compilers × 3 seed slots = 216 scheduled entries, each with three compilation repetitions (648 potential output checks). All 216 entries completed without timeout or worker error. Of 648 recorded outputs, 597 passed the strict check; the other 51 are from 17 BQSKit line-target entries. Qiskit and pytket each passed all 72 entries; BQSKit passed 55 of 72. BQSKit verification failures retain their raw measurements in every UI view. Their Quality and Speed scores include a pass-rate penalty and an asterisk, rather than being hidden. The three newly added families each have only one instance; family-balanced weighting does not make this a representative corpus-wide evaluation.
+12 circuits in six families × 2 targets × **11 configurations** × 3 seed slots = **792 scheduled entries**, each with three repetitions (2,376 potential output checks). After the 600-second timeout retry, 633 entries passed, 141 completed with failed strict verification, and 18 remained timed out; there were no worker errors. The 774 completed entries contain 2,322 output trials, of which 1,899 passed QCEC.
+
+All four Qiskit levels and pytket Basic/Peephole passed 72/72 entries each. pytket Pauli passed 42/72. BQSKit levels 1/2/3/4 passed 55/39/41/24 of 72 entries respectively. BQSKit levels 2/3/4 each have six remaining timeouts, all on the 10-qubit Hamiltonian input across both targets. This is a limit of the recorded campaign, not a claim that the SDK cannot compile that circuit.
+
+Verification-failed outputs retain counts, depths, and times. Their scores use the unchanged pass-rate penalty and asterisk. Entirely unmeasured cases remain N/A. Grover, VQE, and Hamiltonian each have only one instance; family balancing does not make this a representative corpus-wide evaluation.
 
 The machine is shared. The runner pins affinity to the first permitted CPU and sets thread environment variables to one. CPU frequency, sibling hardware threads, and other jobs are not controlled. It is not an exclusive-machine measurement. Full metadata is in [results.json](../data/results.json).
 
 Timing includes pipeline construction and compilation. SDK import, parsing, export, conversion for validation, equivalence checking, and BQSKit local runtime startup/shutdown are excluded. BQSKit model construction and workflow execution are timed. A new BQSKit runtime is created for every repetition, with one worker and one BLAS thread. The first repetition can include first-use costs; this is not a rigorously warm-only measurement.
 
-Each entry runs in a new worker, with its three repetitions in the same process. A 120-second worker timeout includes all repetitions and checking. It is not a 60-second limit on one compilation. No memory cap is enforced. Timed-out workers and their local runtime descendants are terminated as one process group. Worker order is shuffled with a fixed seed.
+Each circuit/configuration/target/seed entry runs in a new worker containing three repetitions. The **600-second worker wall budget** includes SDK imports, parsing, pipeline construction, all three compilations, QCEC checks, export, and runtime startup/shutdown. It is not 600 seconds per compilation. QCEC's individual verification timeout remains 20 seconds. No memory cap is enforced. Timed-out workers and their descendants are terminated as one process group. The initial full schedule is shuffled with a fixed seed.
+
+The campaign initially used 120-second workers. Of 792 entries, 750 completed and 42 timed out. Only those 42 were retried with 600 seconds; **all 750 completed outcomes were retained exactly**, including strict verification failures. The retry completed 24 more entries, all verification-failed, leaving 18 timeouts. Completed initial jobs already satisfied the new 600-second admission budget. Timing variability across the two measurement windows is not controlled.
+
+The initial results are preserved in [the 120-second attempt snapshot](../data/attempts/pilot-v0.4-120s.json). Retried records retain their complete initial result under `previous_attempts` and record `worker_timeout_seconds=600`; the protocol identifies retained initial outcomes and the initial budget. `atlas.py retry-timeouts` retries only timeouts recorded below the current budget, validates input hashes/dependency versions and restores affinity/thread settings, and saves after every retry. It does not retry verification failures or repeat already attempted 600-second timeouts. The published results retain both the original and updated timestamps.
 
 The UI reports the median of the three timing repetitions within each seed slot, then the median across available measured slots, including slots whose strict equivalence check failed. Gate counts and depths use the same two-stage aggregation. Missing measurements are omitted rather than filled with zero or invented. Partial coverage is explicitly labeled; a median over two available slots is not a complete three-slot comparison. Every repetition is retained in the raw data. Timing tooltips show the recorded sample range.
 
@@ -86,7 +109,7 @@ During development, the adder exposed a mapping bug in the measurement code: Qis
 
 ## Scores and UI views
 
-The current score version is **`qcec-adjusted-v1`**, shown in the report and embedded JSON. This is an exploratory benchmark rule, not the earlier all-or-nothing verified score, and not the proposed formal suite score. Earlier scores must not be compared directly with this version. The v0.3 measurement bytes, input hashes, compiler pipelines, and QCEC acceptance settings are unchanged; only presentation and scoring change.
+The current score version is **`qcec-adjusted-v1`**, shown in the report and embedded JSON. This is an exploratory benchmark rule, not the earlier all-or-nothing verified score, and not the proposed formal suite score. Earlier scores must not be compared directly with this version. v0.4 introduces freshly measured configuration entries; v0.3 remains preserved separately. The score formula, frozen input hashes, and QCEC acceptance settings are unchanged.
 
 First compute unpenalized performance for each circuit from every available measured seed slot, including verification-failed outputs:
 
@@ -107,7 +130,7 @@ Speed   = Speed before penalty × QCEC pass rate
 
 Each required seed slot receives equal weight in this factor. A slot passes only if the worker status is passed and all three recorded output repetitions are accepted by QCEC. Failed, missing, timed-out, or ambiguous duplicate seed slots do not count as passed; the denominator remains the predefined number of selected circuits × three seeds. The factor is not the percentage of fully verified circuits, and not a percentage of hardware shots. Geometrically averaging already-penalized circuit scores is deliberately avoided: one zero does not automatically zero an entire family that has other passing slots.
 
-Examples: QFT on the BQSKit line target has 4/9 passed slots, so its family score is its unpenalized performance × 4/9. BQSKit's full line selection has 19/36 passed slots, so its aggregate uses 19/36. For the 4-qubit Atlas QFT alone, the factor is 1/3. If no slot passes but measurements are available, Quality and Speed are zero, not N/A.
+Examples: QFT for BQSKit level 1 on the line target has 4/9 passed slots, so its family score is its unpenalized performance × 4/9. BQSKit level 1's full line selection has 19/36 passed slots, so its aggregate uses 19/36. For the 4-qubit Atlas QFT alone, the factor is 1/3. If no slot passes but measurements are available, Quality and Speed are zero, not N/A.
 
 Scores with a pass rate below 100% carry **`*`** and a tinted cell. Hover text and the marked cell's keyboard/mobile-accessible Details control show performance before penalty, passed/required slots, and pass rate. Quality scores use one decimal; positive Speed scores below 1 use three decimals so small values remain visible. The footnote explains that the reduction includes failed or missing checks. This makes incomplete acceptance visible, not equivalent to fully verified output. Output-rule checks remain separate from QCEC.
 
@@ -120,6 +143,6 @@ The linear penalty is a declared policy choice. It treats each unaccepted slot e
 - **Matrix:** adjusted scores include the penalty, asterisk, tint, and Details. Best-value shading compares adjusted scores; for raw metrics it only compares fully verified outputs. Verification labels remain visible even with detailed columns off.
 - **Trade-off:** every available raw time/count or depth pair is plotted. Filled points passed all required checks; hollow points are unverified or partial. The plot is not a score ranking.
 
-Compiler filtering retains the Qiskit reference and does not change the selected circuit set. Target, family, and width filters change that set, its pass-rate denominator, and its scores. Values from different selections or score versions are not directly comparable. URL fragments preserve view/filter state.
+Compiler filtering retains the Qiskit reference and does not change the selected circuit set. The SDK filter shows all its configurations; the independent effort/configuration filter selects a single entry without removing the level-2 reference. Target, family, and width filters change the circuit set, its pass-rate denominator, and its scores. The plot uses SDK colors and identifies each configuration in point descriptions. Values from different selections or score versions are not directly comparable. URL fragments preserve view/filter state.
 
 The small suite does not establish general SDK superiority, quantum hardware success probability, or performance on unmeasured algorithms such as Shor.

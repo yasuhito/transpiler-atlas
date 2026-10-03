@@ -1,0 +1,14 @@
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg node[2];
+rz(pi) node[0];
+rz(pi/2) node[1];
+sx node[1];
+cx node[1],node[0];
+rz(pi/2) node[0];
+sx node[1];
+sx node[0];
+rz(pi/2) node[0];
+cx node[1],node[0];
+sx node[1];
+rz(pi/2) node[1];

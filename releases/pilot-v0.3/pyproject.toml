@@ -1,0 +1,27 @@
+[project]
+name = "transpiler-atlas"
+version = "0.1.0"
+description = "Reproducible quantum transpiler pilot and static report"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "qiskit>=2,<3",
+  "pytket>=2,<3",
+  "pytket-qiskit>=0.70,<1",
+  "mqt.qcec>=3,<4",
+  "markdown>=3.7,<4",
+  "bqskit>=1.2,<2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["releases"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

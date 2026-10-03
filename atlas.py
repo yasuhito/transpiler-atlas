@@ -22,9 +22,67 @@ ROOT = Path(__file__).resolve().parent
 BASIS = {"rz", "sx", "x", "cx"}
 SEEDS = [7, 19, 43]
 REPEATS = 3
-SUITE = "pilot-v0.3"
+SUITE = "pilot-v0.4"
 COMPILERS = ["qiskit", "pytket", "bqskit"]
 BQSKIT_EPSILON = 1e-12
+WORKER_TIMEOUT_SECONDS = 600
+REFERENCE_CONFIGURATION = "qiskit-l2"
+CONFIGURATIONS = [
+    *[
+        {
+            "id": f"qiskit-l{level}",
+            "compiler": "qiskit",
+            "label": f"Level {level}",
+            "optimization_level": level,
+            "seed_supported": True,
+        }
+        for level in range(4)
+    ],
+    {
+        "id": "pytket-basic",
+        "compiler": "pytket",
+        "label": "Basic synthesis",
+        "recipe": "basic",
+        "seed_supported": False,
+    },
+    {
+        "id": "pytket-peephole",
+        "compiler": "pytket",
+        "label": "Peephole",
+        "recipe": "peephole",
+        "seed_supported": False,
+    },
+    {
+        "id": "pytket-pauli",
+        "compiler": "pytket",
+        "label": "Pauli + peephole",
+        "recipe": "pauli",
+        "seed_supported": True,
+    },
+    *[
+        {
+            "id": f"bqskit-l{level}",
+            "compiler": "bqskit",
+            "label": f"Level {level} · 2Q blocks",
+            "optimization_level": level,
+            "seed_supported": True,
+        }
+        for level in range(1, 5)
+    ],
+]
+
+
+def configuration_for(identifier: str) -> dict:
+    # Keep the previous adapter entry points usable by existing pipeline tests.
+    identifier = {"qiskit": "qiskit-l2", "pytket": "pytket-peephole", "bqskit": "bqskit-l1"}.get(
+        identifier, identifier
+    )
+    for configuration in CONFIGURATIONS:
+        if configuration["id"] == identifier:
+            return configuration
+    raise ValueError(f"Unknown configuration: {identifier}")
+
+
 QASMBENCH_REVISION = "357b942396d5c2b7cbc1c229c585a6ef5ccaebac"
 CORPUS_CASES = {
     "qft_n4": "QFT",
@@ -234,6 +292,8 @@ def generate_inputs() -> list[dict]:
 def compile_once(original, compiler: str, target: str, seed: int):
     from qiskit import qasm2
 
+    configuration = configuration_for(compiler)
+    compiler = configuration["compiler"]
     n = original.num_qubits
     edges = edges_for(n, target)
     if compiler == "qiskit":
@@ -242,7 +302,7 @@ def compile_once(original, compiler: str, target: str, seed: int):
 
         start = time.perf_counter_ns()
         pm = generate_preset_pass_manager(
-            optimization_level=2,
+            optimization_level=configuration["optimization_level"],
             basis_gates=sorted(BASIS),
             coupling_map=CouplingMap(edges),
             seed_transpiler=seed,
@@ -260,6 +320,7 @@ def compile_once(original, compiler: str, target: str, seed: int):
             AutoRebase,
             DefaultMappingPass,
             FullPeepholeOptimise,
+            GreedyPauliSimp,
             SequencePass,
             SynthesiseTket,
         )
@@ -277,9 +338,23 @@ def compile_once(original, compiler: str, target: str, seed: int):
         ]
         start = time.perf_counter_ns()
         unit = CompilationUnit(tkc)
+        recipe = configuration["recipe"]
+        optimisation = (
+            [SynthesiseTket()] if recipe == "basic" else [FullPeepholeOptimise(allow_swaps=False)]
+        )
+        if recipe == "pauli":
+            optimisation.insert(
+                0,
+                GreedyPauliSimp(
+                    seed=seed,
+                    thread_timeout=5,
+                    trials=1,
+                    only_reduce=True,
+                ),
+            )
         pipeline = SequencePass(
             [
-                FullPeepholeOptimise(allow_swaps=False),
+                *optimisation,
                 DefaultMappingPass(Architecture(edges)),
                 SynthesiseTket(),
                 AutoRebase({OpType.Rz, OpType.SX, OpType.X, OpType.CX}, allow_swaps=False),
@@ -310,7 +385,7 @@ def compile_once(original, compiler: str, target: str, seed: int):
             compiled, initial, final = bq_compile(
                 circuit,
                 model=model,
-                optimization_level=1,
+                optimization_level=configuration["optimization_level"],
                 max_synthesis_size=2,
                 synthesis_epsilon=BQSKIT_EPSILON,
                 seed=seed,
@@ -331,6 +406,7 @@ def compile_once(original, compiler: str, target: str, seed: int):
 def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
     from qiskit import qasm2
 
+    configuration = configuration_for(compiler)
     original = qasm2.load(ROOT / case["path"])
     timings = []
     trials = []
@@ -350,7 +426,7 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     artifacts = []
     for i, trial in enumerate(trials):
-        filename = f"{case['id']}-{target}-{compiler}-s{seed}-r{i}.qasm"
+        filename = f"{case['id']}-{target}-{configuration['id']}-s{seed}-r{i}.qasm"
         path = output_dir / filename
         path.write_text(trial.pop("qasm") + "\n")
         trial["artifact"] = str(path.relative_to(ROOT))
@@ -360,10 +436,11 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
         "case_id": case["id"],
         "family": case["family"],
         "qubits": case["qubits"],
-        "compiler": compiler,
+        "compiler": configuration["compiler"],
+        "configuration_id": configuration["id"],
         "target": target,
         "seed": seed,
-        "seed_supported": compiler in {"qiskit", "bqskit"},
+        "seed_supported": configuration["seed_supported"],
         "status": "passed" if valid else "verification_failed",
         "compile_ms": statistics.median(timings),
         "timing_samples_ms": timings,
@@ -375,7 +452,149 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
     }
 
 
-def run_pilot(*, overwrite: bool = False) -> None:
+def execute_job(case: dict, configuration: str, target: str, seed: int, env: dict) -> dict:
+    command = [
+        sys.executable,
+        str(ROOT / "atlas.py"),
+        "worker",
+        case["id"],
+        configuration,
+        target,
+        str(seed),
+    ]
+    try:
+        with subprocess.Popen(
+            command,
+            cwd=ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        ) as execution:
+            try:
+                stdout, stderr = execution.communicate(timeout=WORKER_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(execution.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                execution.communicate()
+                raise
+            if execution.returncode:
+                raise RuntimeError(stderr[-4000:])
+            result = json.loads(stdout)
+    except subprocess.TimeoutExpired:
+        result = {
+            "status": "timeout",
+            "error": f"{WORKER_TIMEOUT_SECONDS} s worker budget exceeded",
+        }
+    except (RuntimeError, json.JSONDecodeError) as error:
+        result = {"status": "error", "error": str(error)}
+    spec = configuration_for(configuration)
+    result.update(
+        case_id=case["id"],
+        family=case["family"],
+        qubits=case["qubits"],
+        compiler=spec["compiler"],
+        configuration_id=configuration,
+        seed_supported=spec["seed_supported"],
+        target=target,
+        seed=seed,
+        worker_timeout_seconds=WORKER_TIMEOUT_SECONDS,
+    )
+    return result
+
+
+def retry_timeouts() -> None:
+    path = ROOT / "data/results.json"
+    document = json.loads(path.read_text())
+    if document["suite"] != SUITE or document["protocol"]["configurations"] != CONFIGURATIONS:
+        raise ValueError("Retry requires this suite and unchanged configurations")
+    initial_budget = document["protocol"].get(
+        "initial_worker_timeout_seconds", document["protocol"]["worker_timeout_seconds"]
+    )
+    pending = [
+        i
+        for i, r in enumerate(document["results"])
+        if r["status"] == "timeout"
+        and r.get("worker_timeout_seconds", initial_budget) < WORKER_TIMEOUT_SECONDS
+    ]
+    if not pending:
+        return
+    for case in document["cases"]:
+        if hashlib.sha256((ROOT / case["path"]).read_bytes()).hexdigest() != case["sha256"]:
+            raise ValueError("Retry input hash changed")
+    for package, version in document["environment"]["versions"].items():
+        if importlib.metadata.version(package) != version:
+            raise ValueError("Retry dependency version changed")
+    selected = document["environment"]["cpu_affinity"]
+    if not set(selected) <= os.sched_getaffinity(0):
+        raise ValueError("Original CPU affinity is unavailable")
+    os.sched_setaffinity(0, set(selected))
+    env = dict(os.environ)
+    env.update(document["environment"]["thread_env"])
+    snapshot = ROOT / "data/attempts" / f"{SUITE}-{initial_budget}s.json"
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    if not snapshot.exists():
+        snapshot.write_bytes(path.read_bytes())
+    original = json.loads(snapshot.read_text())
+    retry_count = sum(r["status"] == "timeout" for r in original["results"])
+    document["protocol"].update(
+        worker_timeout_seconds=WORKER_TIMEOUT_SECONDS,
+        initial_worker_timeout_seconds=initial_budget,
+        timeout_retry_entries=retry_count,
+        initial_attempt_snapshot=str(snapshot.relative_to(ROOT)),
+    )
+    cases = {c["id"]: c for c in document["cases"]}
+    for index in pending:
+        previous = document["results"][index]
+        result = execute_job(
+            cases[previous["case_id"]],
+            previous["configuration_id"],
+            previous["target"],
+            previous["seed"],
+            env,
+        )
+        result["previous_attempts"] = [previous]
+        document["results"][index] = result
+        document["updated_at"] = datetime.now(UTC).isoformat()
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
+        temporary.replace(path)
+        print(
+            json.dumps(
+                {
+                    "retried": sum("previous_attempts" in r for r in document["results"]),
+                    "scheduled": retry_count,
+                    "result": result,
+                }
+            ),
+            flush=True,
+        )
+
+
+def read_completed_results(log: Path, jobs: list) -> list[dict]:
+    results = []
+    for line in log.read_text().splitlines():
+        entry = json.loads(line)
+        index = len(results)
+        if index >= len(jobs) or entry["scheduled"] != len(jobs) or entry["completed"] != index + 1:
+            raise ValueError("Resume log is not a contiguous prefix of this schedule")
+        case, configuration, target, seed = jobs[index]
+        result = entry["result"]
+        expected = (case["id"], configuration, target, seed)
+        actual = tuple(result[k] for k in ("case_id", "configuration_id", "target", "seed"))
+        if actual != expected or result["compiler"] != configuration_for(configuration)["compiler"]:
+            raise ValueError("Resume log does not match this schedule")
+        for trial in result.get("trials", []):
+            if not (ROOT / trial["artifact"]).is_file():
+                raise ValueError("Resume artifact is missing")
+        results.append(result)
+    return results
+
+
+def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> None:
     results_path = ROOT / "data" / "results.json"
     if results_path.exists():
         previous = json.loads(results_path.read_text())
@@ -399,7 +618,7 @@ def run_pilot(*, overwrite: bool = False) -> None:
     jobs = [
         (case, compiler, target, seed)
         for case in cases
-        for compiler in COMPILERS
+        for compiler in [c["id"] for c in CONFIGURATIONS]
         for target in ["all-to-all", "line"]
         for seed in SEEDS
     ]
@@ -417,54 +636,17 @@ def run_pilot(*, overwrite: bool = False) -> None:
             ]
         }
     )
-    results = []
-    for case, compiler, target, seed in jobs:
-        command = [
-            sys.executable,
-            str(ROOT / "atlas.py"),
-            "worker",
-            case["id"],
-            compiler,
-            target,
-            str(seed),
-        ]
-        try:
-            with subprocess.Popen(
-                command,
-                cwd=ROOT,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                start_new_session=True,
-            ) as execution:
-                try:
-                    stdout, stderr = execution.communicate(timeout=120)
-                except subprocess.TimeoutExpired:
-                    # BQSKit starts local runtime processes; terminate the whole job.
-                    try:
-                        os.killpg(execution.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass  # The group finished between timeout and termination.
-                    execution.communicate()
-                    raise
-                if execution.returncode:
-                    raise RuntimeError(stderr[-4000:])
-                result = json.loads(stdout)
-        except subprocess.TimeoutExpired:
-            result = {"status": "timeout", "error": "120 s worker budget exceeded"}
-        except (RuntimeError, json.JSONDecodeError) as error:
-            result = {"status": "error", "error": str(error)}
-        result.update(
-            case_id=case["id"],
-            family=case["family"],
-            qubits=case["qubits"],
-            compiler=compiler,
-            target=target,
-            seed=seed,
-        )
+    results = read_completed_results(resume_log, jobs) if resume_log else []
+    resumed_entries = len(results)
+    resume_hash = hashlib.sha256(resume_log.read_bytes()).hexdigest() if resume_log else None
+    for case, compiler, target, seed in jobs[resumed_entries:]:
+        result = execute_job(case, compiler, target, seed, env)
         results.append(result)
-        print(f"{len(results):02}/{len(jobs)} {case['id']} {compiler} {target} {result['status']}")
+        # Persist complete outcomes in the run log even if the long batch is interrupted.
+        print(
+            json.dumps({"completed": len(results), "scheduled": len(jobs), "result": result}),
+            flush=True,
+        )
     cpu = next(
         (
             line.split(":", 1)[1].strip()
@@ -474,7 +656,7 @@ def run_pilot(*, overwrite: bool = False) -> None:
         "unknown",
     )
     document = {
-        "schema_version": 1,
+        "schema_version": 2,
         "suite": SUITE,
         "created_at": datetime.now(UTC).isoformat(),
         "formal_ranking": False,
@@ -506,21 +688,32 @@ def run_pilot(*, overwrite: bool = False) -> None:
             "seeds": SEEDS,
             "timing_repeats": REPEATS,
             "compilers": COMPILERS,
-            "worker_timeout_seconds": 120,
+            "configurations": CONFIGURATIONS,
+            "reference_configuration": REFERENCE_CONFIGURATION,
+            "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
+            "resumed_entries": resumed_entries,
+            "resume_log_sha256": resume_hash,
             "basis": sorted(BASIS),
             "physical_qubits": "equal to input width",
             "timer": "pipeline construction + compilation; excludes parse, export, validation",
             "cold_worker": True,
             "input_track": "Qiskit level-0 lowered common OpenQASM 2; not high-level track",
-            "pytket_pipeline": [
-                "FullPeepholeOptimise(allow_swaps=False)",
-                "DefaultMappingPass(GraphPlacement)",
-                "SynthesiseTket",
-                "AutoRebase(rz,sx,x,cx)",
-            ],
-            "qiskit_pipeline": "preset level 2, approximation_degree=1.0",
+            "pytket_pipeline": {
+                "basic": ["SynthesiseTket"],
+                "peephole": ["FullPeepholeOptimise(allow_swaps=False)"],
+                "pauli": [
+                    "GreedyPauliSimp(seed=slot, thread_timeout=5, trials=1, only_reduce=True)",
+                    "FullPeepholeOptimise(allow_swaps=False)",
+                ],
+                "shared_suffix": [
+                    "DefaultMappingPass(GraphPlacement)",
+                    "SynthesiseTket",
+                    "AutoRebase(rz,sx,x,cx,allow_swaps=False)",
+                ],
+            },
+            "qiskit_pipeline": "preset levels 0/1/2/3, approximation_degree=1.0",
             "bqskit_pipeline": {
-                "optimization_level": 1,
+                "optimization_levels": [1, 2, 3, 4],
                 "max_synthesis_size": 2,
                 "synthesis_epsilon": BQSKIT_EPSILON,
                 "num_workers": 1,
@@ -543,12 +736,15 @@ def run_pilot(*, overwrite: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["run", "worker"])
+    parser.add_argument("action", choices=["run", "worker", "retry-timeouts"])
     parser.add_argument("args", nargs="*")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--resume-log", type=Path)
     options = parser.parse_args()
     if options.action == "run":
-        run_pilot(overwrite=options.overwrite)
+        run_pilot(overwrite=options.overwrite, resume_log=options.resume_log)
+    elif options.action == "retry-timeouts":
+        retry_timeouts()
     else:
         case_id, compiler, target, seed = options.args
         manifest = json.loads((ROOT / "data" / "manifest.json").read_text())

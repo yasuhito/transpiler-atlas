@@ -1,4 +1,5 @@
 import hashlib
+import json
 import shutil
 
 import pytest
@@ -133,7 +134,7 @@ def test_corpus_allows_disjoint_gates_after_readout(tmp_path):
 
 def test_existing_suite_requires_explicit_overwrite(tmp_path, monkeypatch):
     (tmp_path / "data").mkdir()
-    (tmp_path / "data/results.json").write_text('{"suite": "pilot-v0.3"}')
+    (tmp_path / "data/results.json").write_text(json.dumps({"suite": atlas.SUITE}))
     monkeypatch.setattr(atlas, "ROOT", tmp_path)
     with pytest.raises(RuntimeError, match="--overwrite"):
         atlas.run_pilot()

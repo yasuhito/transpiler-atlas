@@ -1,0 +1,2 @@
+# Preserve published snapshots byte-for-byte, including upstream whitespace.
+releases/** -whitespace

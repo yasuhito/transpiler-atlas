@@ -48,18 +48,20 @@ Open `http://localhost:8765/`. Deploy the site tree together with `web/`, `docs/
 
 ## Implemented pilot
 
-Pilot v0.3: 12 circuits × 2 topologies × 3 compilers × 3 seed slots, with three repetitions each: 216 scheduled entries and up to 648 output checks. All 216 entries completed; 597/648 outputs passed strict validation. BQSKit had 17 verification-failed line-target entries; all 36 of its all-to-all entries passed. BQSKit outputs that fail the unchanged strict QCEC check remain unverified, but their gate counts, depths, and times are displayed. Scores use **`qcec-adjusted-v1`**: unpenalized performance × QCEC pass rate. Failed or missing checks reduce the score rather than hiding it; `*`, tinted cells, and Details expose the penalty. Raw measurements are not hidden and the verifier is not relaxed.
+Pilot v0.4: **11 SDK/configuration entries** on 12 circuits × 2 topologies × 3 seed slots, with three repetitions each: **792 scheduled entries** and up to 2,376 output checks. Qiskit levels 0/1/2/3, pytket Basic/Peephole/Pauli + peephole recipes, and BQSKit levels 1/2/3/4 have separate ranking rows. The SDK and effort/configuration filters are independent; level numbers are not equal effort units across SDKs.
+
+The final worker budget is **600 seconds for all three compilations, checks, and startup/shutdown together**, not per compilation. The initial 120-second campaign completed 750 entries; only its 42 timeouts were retried, retaining all 750 completed outcomes exactly. After retry, 633 entries passed, 141 completed with failed verification, and 18 remained timed out, all for the 10-qubit Hamiltonian on BQSKit levels 2/3/4. Of 2,322 recorded outputs, 1,899 passed QCEC. Initial results and per-entry retry histories are preserved. Entirely unmeasured cases remain N/A, not invented zero measurements. BQSKit outputs that fail the unchanged strict QCEC check remain unverified, but their gate counts, depths, and times are displayed. Scores use **`qcec-adjusted-v1`**: unpenalized performance × QCEC pass rate. Failed or missing checks reduce the score rather than hiding it; `*`, tinted cells, and Details expose the penalty. Raw measurements are not hidden and the verifier is not relaxed.
 
 - Six families: QFT, QAOA, Adder, Grover, VQE, Hamiltonian. Six original generated circuits plus six fixed QASMBench imports.
 - [Corpus sources and license review](docs/corpora.md); original QASM, license, parameters, and source/input hashes are retained. Expand Input details in the per-circuit view.
 - Earlier measurement snapshots and their sources/dependency locks remain in `releases/`, without links from the current site.
-- [BQSKit adapter](docs/bqskit.md): standard level 1, two-qubit blocks, synthesis epsilon `1e-12`, seeded, one local worker/BLAS thread, returned wire maps, unchanged QCEC acceptance.
+- [BQSKit adapter](docs/bqskit.md): standard levels 1/2/3/4, fixed two-qubit blocks, synthesis epsilon `1e-12`, seeded, one local worker/BLAS thread, returned wire maps, unchanged QCEC acceptance.
 - Targets: Atlas-designed synthetic input-width all-to-all and line, bidirectional CX. These are not named hardware devices, corpus requirements, or adopted standard specifications.
 - Native basis: `rz,sx,x,cx`.
 - Shared host, single-core affinity; not an exclusive controlled machine.
 - Frozen low-level OpenQASM 2 inputs lowered by Qiskit level 0; not a high-level-neutral input track. Corpus barriers and per-wire terminal readout are removed; preparation gates remain.
-- pytket does not use the seed in this pipeline. Its seed slots represent repeated measurements.
-- Unpenalized Quality/Speed use a measured Qiskit reference = 100 and equal family weights. Both displayed scores multiply that performance by passed/required QCEC seed slots. Missing slots stay in the denominator; measured outputs with no passing slots score zero.
+- pytket Basic and Peephole repeat unseeded pipelines. Pauli + peephole uses the scheduled seed, with a declared five-second internal search timeout and one search trial. These are explicit Atlas recipes, not backend-default level claims.
+- Unpenalized Quality/Speed use a fixed, freshly measured Qiskit level 2 reference = 100 and equal family weights. Both displayed scores multiply that performance by passed/required QCEC seed slots. Missing slots stay in the denominator; measured outputs with no passing slots score zero.
 - N/A means required raw metrics or Qiskit reference values are unavailable. Do not silently omit wholly unmeasured circuits from aggregate scores. Earlier all-or-nothing scores are not directly comparable to this score version.
 - Output rules (gates, connections, width) and strict equivalence checks are displayed separately. All measured outputs appear in the plot: filled for fully verified, hollow otherwise. Partial raw medians are labeled.
 
@@ -77,11 +79,11 @@ See [pilot protocol](docs/pilot.md) / [HTML](docs/pilot.html) for precision, map
 
 `index.html`, `docs/*.html`, and `data/*` are generated artifacts. Do not hand-edit them. `corpora/` contains unmodified licensed upstream inputs. `releases/` contains immutable published snapshots; do not regenerate them with current sources. v0.2 includes its linked v0.1 snapshot to preserve historical relative links.
 
-`atlas.py run` refuses to replace current-suite measurements without `--overwrite`, and refuses a suite change without a matching archived results file. Preserve any measurements you need before explicitly overwriting them. Tests generate their inputs in temporary directories.
+`atlas.py run` refuses to replace current-suite measurements without `--overwrite`, and refuses a suite change without a matching archived results file. Preserve any measurements you need before explicitly overwriting them. Fresh full runs use 600-second workers. `atlas.py retry-timeouts` retries only outcomes whose recorded timeout budget is below the current one, preserves initial results under `data/attempts/` and `previous_attempts`, and saves after every retry. `--resume-log` supports continuation of a long interrupted run with unchanged inputs/settings/environment. Tests generate their inputs in temporary directories.
 
 ## Planned scope
 
-Add Cirq after choosing an explicit pipeline. BQSKit's higher optimization levels and approximate-error tracks require separate declared configurations. Broaden widths, parameter sets, and fixed grid/large targets after validating adapters. Shor, specialized mapping, fault-tolerant, cloud, and dynamic-circuit tracks remain separate proposals. No unmeasured compilers appear as fabricated leaderboard entries.
+Add Cirq after choosing an explicit pipeline. Additional synthesis block sizes, precision settings, and approximate-error tracks require separate declared configurations. Broaden widths, parameter sets, and fixed grid/large targets after validating adapters. Shor, specialized mapping, fault-tolerant, cloud, and dynamic-circuit tracks remain separate proposals. No unmeasured compilers appear as fabricated leaderboard entries.
 
 Compiler benchmarking already exists in Benchpress, ucc-bench, Arline, and others. This project aims at reproducible conditional results presentation, not a claim to be the first comparison.
 

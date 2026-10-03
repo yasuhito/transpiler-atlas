@@ -5,6 +5,8 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const root = process.cwd();
+const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/results.json'), 'utf8'));
+const bqId = raw.protocol.configurations ? 'bqskit-l1' : 'bqskit';
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const server = http.createServer((request, response) => {
   const pathname = new URL(request.url, 'http://localhost').pathname;
@@ -27,7 +29,7 @@ try {
   const resolved = async theme => assert.equal(await page.locator('html').getAttribute('data-theme'), theme);
   assert.equal(await page.locator('#theme').inputValue(), 'system');
   await resolved('dark');
-  assert.equal(await page.locator('#result-rows tr[data-compiler="bqskit"] td').nth(2).evaluate(n => getComputedStyle(n).backgroundColor), 'rgb(53, 42, 28)');
+  assert.equal(await page.locator(`#result-rows tr[data-compiler="${bqId}"] td`).nth(2).evaluate(n => getComputedStyle(n).backgroundColor), 'rgb(53, 42, 28)');
   assert.equal(await page.locator('a[href*="releases/"]').count(), 0);
   const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   await page.screenshot({ path: '/tmp/transpiler-atlas-dark.png', fullPage: true });
