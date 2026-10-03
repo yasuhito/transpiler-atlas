@@ -26,16 +26,32 @@ Primary sources: the [versioned standard compile implementation and parameter do
 
 ## Numerical approximation and unfinished checks
 
-| Diagnostic sample | Global-phase-aligned operator-norm distance |
-| --- | ---: |
-| Stock BQSKit level 2, ising_n10, all-to-all, seed 7 | 8.44e-8 |
-| Stock BQSKit level 2, ising_n10, line, seed 7 | 8.44e-8 |
-| Stock BQSKit level 3, ising_n10, all-to-all, seed 7 | 4.79e-8 |
-| Stock BQSKit level 4, ising_n10, all-to-all, seed 7 | 1.14e-7 |
-| Qiskit level 2, ising_n10, all-to-all, seed 7 | 2.96e-14 |
-| BQSKit level 1, ising_n10, all-to-all, seed 7 | 1.59e-14 |
+| Config | Target | Seed | Operator-norm distance | CX | 2Q depth |
+| --- | --- | ---: | ---: | ---: | ---: |
+| bqskit-l2 | all-to-all | 7 | 8.437908e-08 | 90 | 20 |
+| bqskit-l2 | all-to-all | 19 | 5.957263e-08 | 90 | 20 |
+| bqskit-l2 | all-to-all | 43 | 5.821035e-08 | 90 | 20 |
+| bqskit-l2 | line | 7 | 8.437924e-08 | 90 | 20 |
+| bqskit-l2 | line | 19 | 5.957263e-08 | 90 | 20 |
+| bqskit-l2 | line | 43 | 5.821035e-08 | 90 | 20 |
+| bqskit-l3 | all-to-all | 7 | 4.794312e-08 | 90 | 20 |
+| bqskit-l3 | all-to-all | 19 | 5.863893e-08 | 90 | 20 |
+| bqskit-l3 | all-to-all | 43 | 2.420374e-08 | 90 | 20 |
+| bqskit-l3 | line | 7 | 4.794275e-08 | 90 | 20 |
+| bqskit-l3 | line | 19 | 5.863893e-08 | 90 | 20 |
+| bqskit-l3 | line | 43 | 2.420374e-08 | 90 | 20 |
+| bqskit-l4 | all-to-all | 7 | 1.140336e-07 | 90 | 20 |
+| bqskit-l4 | all-to-all | 19 | 1.145717e-07 | 90 | 20 |
+| bqskit-l4 | all-to-all | 43 | 8.513146e-08 | 90 | 20 |
+| bqskit-l4 | line | 7 | 1.140336e-07 | 90 | 20 |
+| bqskit-l4 | line | 19 | 1.145717e-07 | 90 | 20 |
+| bqskit-l4 | line | 43 | 8.513146e-08 | 90 | 20 |
 
-These are independent diagnostics on one circuit and one seed, with wire maps accounted for. They are not campaign measurements, QCEC verdicts, corpus-wide error bounds, or a guarantee that level 1 is exact. Levels 2, 3, and 4 are labeled approx.; level 1 is not labeled. Absence of the label does not guarantee exact equivalence.
+L4 all-to-all seed 19 ran while a BQSKit runtime port collision ("Address already in use") was logged, so its CPU pinning and compile time are not guaranteed; the distance, computed from the saved output, is valid.
+
+Distances are global-phase-aligned operator norms comparing the saved outputs, with wire maps accounted for, against the original input's 1024x1024 unitary; no QCEC was run for these diagnostics, and no angles were rounded or snapped.
+
+These are independent diagnostics on one circuit, ising_n10, at seeds 7, 19, and 43. They are not campaign measurements, QCEC verdicts, corpus-wide error bounds, or evidence of the stopping path of the campaign's timeouts. The earlier all-to-all seed-7 reference distances were 2.96e-14 for Qiskit level 2 and 1.59e-14 for BQSKit level 1; they do not guarantee that level 1 is exact. Levels 2, 3, and 4 are labeled approx.; level 1 is not labeled. Absence of the label does not guarantee exact equivalence.
 
 Stock level 2 ends with gate-deletion optimization. In BQSKit 1.2.1, ScanningGateRemovalPass removes a candidate gate, re-instantiates the remaining parameters, and accepts the candidate when its scalar cost is below success_threshold. Atlas sets this threshold through synthesis_epsilon=1e-12. The acceptance branch does not independently check a unitary-difference norm. In the investigated sample, the first accepted removal had cost 0.0 but operator-norm distance 1.516e-8; the final output distance was 8.44e-8. The internal threshold therefore must not be interpreted as a 1e-12 whole-circuit distance guarantee.
 
