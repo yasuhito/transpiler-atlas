@@ -1,8 +1,42 @@
-# Pilot v0.4: configurations, protocol, and limitations
+# Pilot protocol and preserved v0.4 results
+
+## Next campaign: pilot-v0.5-qmap-420s
+
+The approved next campaign adds `qmap-sc-heuristic-maponly-v1` and measures all
+12 configurations anew: 12 frozen inputs × 12 configurations × 2 targets ×
+3 seed slots = **864 entries**, each with three repetitions. No v0.5 measurements
+have been published. The currently displayed dataset remains v0.4.
+
+The shared full-worker budget is **420 seconds**, derived only from
+`atlas.WORKER_TIMEOUT_SECONDS` and recorded in protocol, records, campaign spec
+and snapshot. The seed schedule, input identity, basis, bidirectional targets,
+equal physical/input width, no-ancilla rule, strict QCEC tolerances, scoring and
+Qiskit L2 reference are unchanged. QMAP has no seed API; its slots independently
+repeat the same mapping-only recipe, without reusing outputs.
+
+Use a new create-only workspace, never the historical results path:
+
+```sh
+uv sync --frozen
+uv run --frozen python atlas.py campaign --into /tmp/ta-qmap/campaigns --prepare-only
+# Full measurement requires explicit execution approval:
+uv run --frozen python atlas.py campaign --into /tmp/ta-qmap/campaigns
+```
+
+See [QMAP recipe and workspace lifecycle](qmap.md) for exact settings, mapping,
+phase, timing, completed-snapshot site generation and incomplete-run handling.
+Resume, retry and overwrite are refused for this new campaign. Historical
+120/600-second data must not be relabeled as 420-second data or combined with it.
+
+## Preserved v0.4 protocol
+
+The remainder documents the historical v0.4 dataset, including its original
+commands and budget. Those commands refer to the preserved v0.4 source, not the
+new runner, which refuses to overwrite historical results.
 
 This is an end-to-end feasibility experiment, not the formal suite v1 proposed in the methodology. It tests compilation, output constraints, and equivalence with input/output wire maps taken into account.
 
-## Reproduction
+## Historical reproduction
 
 ```bash
 uv sync --frozen

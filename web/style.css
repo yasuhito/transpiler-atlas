@@ -63,6 +63,7 @@ th.num, td.num { padding-left: 8px; padding-right: 8px; }
 .qiskit { background: var(--qiskit); }
 .pytket { background: var(--pytket); }
 .bqskit { background: var(--bqskit); }
+.qmap { background: var(--qmap); }
 .sub { display: block; color: var(--muted); margin: 3px 0 0 14px; font-size: 10px; font-weight: 400; }
 .mono { font: 10px var(--mono); }
 .selected-metric { background: var(--selected); font-weight: 550; color: var(--selected-text); }
@@ -98,9 +99,11 @@ td.num > .approximation-tag { margin-top: 4px; }
 #chart .chart-label.qiskit { fill: var(--qiskit); }
 #chart .chart-label.pytket { fill: var(--pytket); }
 #chart .chart-label.bqskit { fill: var(--bqskit); }
+#chart .chart-label.qmap { fill: var(--qmap); }
 #chart circle.qiskit { fill: var(--qiskit); }
 #chart circle.pytket { fill: var(--pytket); }
 #chart circle.bqskit { fill: var(--bqskit); }
+#chart circle.qmap { fill: var(--qmap); }
 #chart circle.unverified { fill: var(--bg); stroke: var(--point-color); stroke-width: 2; }
 .plot-note { margin: 2px 0 0; color: var(--muted); font-size: 10px; }
 .run-details { margin-top: 28px; border-top: 1px solid var(--border); padding: 16px 0 0; font-size: 11px; color: var(--muted); }

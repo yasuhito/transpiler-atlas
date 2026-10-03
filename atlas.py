@@ -18,14 +18,17 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from qmap_adapter import recipe_metadata
+
 ROOT = Path(__file__).resolve().parent
 BASIS = {"rz", "sx", "x", "cx"}
 SEEDS = [7, 19, 43]
 REPEATS = 3
-SUITE = "pilot-v0.4"
-COMPILERS = ["qiskit", "pytket", "bqskit"]
+SUITE = "pilot-v0.5-qmap-420s"
+COMPILERS = ["qiskit", "pytket", "bqskit", "qmap"]
+SDK_PACKAGES = {"qiskit": "qiskit", "pytket": "pytket", "bqskit": "bqskit", "qmap": "mqt.qmap"}
 BQSKIT_EPSILON = 1e-12
-WORKER_TIMEOUT_SECONDS = 600
+WORKER_TIMEOUT_SECONDS = 420
 REFERENCE_CONFIGURATION = "qiskit-l2"
 CONFIGURATIONS = [
     *[
@@ -69,6 +72,13 @@ CONFIGURATIONS = [
         }
         for level in range(1, 5)
     ],
+    {
+        "id": "qmap-sc-heuristic-maponly-v1",
+        "compiler": "qmap",
+        "label": "Heuristic mapping + native lowering",
+        "seed_supported": False,
+        "recipe": recipe_metadata(),
+    },
 ]
 
 
@@ -418,15 +428,29 @@ def compile_once(original, compiler: str, target: str, seed: int):
             custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS,
         )
         initial, final = list(initial), list(final)
+    elif compiler == "qmap":
+        from qmap_adapter import NativeTarget, compile_native
+
+        return compile_native(original, NativeTarget(n, tuple(edges), tuple(sorted(BASIS))))
     else:
         raise ValueError(compiler)
     return native, elapsed, initial, final
 
 
-def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
+def worker(
+    case: dict, compiler: str, target: str, seed: int, *, artifact_root: Path | None = None
+) -> dict:
     from qiskit import qasm2
 
     configuration = configuration_for(compiler)
+    if artifact_root is None and (ROOT / "data/results.json").exists():
+        raise RuntimeError("Existing measurements must not be overwritten")
+    output_dir = artifact_root if artifact_root is not None else ROOT / "data" / "outputs"
+    if any(path.is_symlink() for path in [output_dir, *output_dir.parents]):
+        raise ValueError("Symlink artifact directory")
+    if artifact_root is None and not output_dir.resolve().is_relative_to(ROOT.resolve()):
+        raise ValueError("Escaping artifact directory")
+    output_dir.mkdir(parents=True, exist_ok=True)
     original = qasm2.load(ROOT / case["path"])
     timings = []
     trials = []
@@ -439,17 +463,20 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
                 "validation": check_equivalence(original, native, initial, final),
                 "initial_map": initial,
                 "final_map": final,
+                "global_phase": float(native.global_phase),
                 "qasm": qasm2.dumps(native),
             }
         )
-    output_dir = ROOT / "data" / "outputs"
-    output_dir.mkdir(parents=True, exist_ok=True)
     artifacts = []
     for i, trial in enumerate(trials):
         filename = f"{case['id']}-{target}-{configuration['id']}-s{seed}-r{i}.qasm"
         path = output_dir / filename
-        path.write_text(trial.pop("qasm") + "\n")
-        trial["artifact"] = str(path.relative_to(ROOT))
+        with path.open("x") as stream:
+            stream.write(trial.pop("qasm") + "\n")
+        trial["artifact"] = (
+            str(path.resolve()) if artifact_root is not None else str(path.relative_to(ROOT))
+        )
+        trial["artifact_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         artifacts.append(trial)
     valid = all(t["validation"]["accepted"] for t in trials)
     return {
@@ -464,6 +491,7 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
         "status": "passed" if valid else "verification_failed",
         "compile_ms": statistics.median(timings),
         "timing_samples_ms": timings,
+        "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
         "metrics": {
             key: statistics.median(t["metrics"][key] for t in trials)
             for key in ["two_qubit_count", "two_qubit_depth", "total_depth", "one_qubit_count"]
@@ -472,7 +500,15 @@ def worker(case: dict, compiler: str, target: str, seed: int) -> dict:
     }
 
 
-def execute_job(case: dict, configuration: str, target: str, seed: int, env: dict) -> dict:
+def execute_job(
+    case: dict,
+    configuration: str,
+    target: str,
+    seed: int,
+    env: dict,
+    *,
+    artifact_root: Path | None = None,
+) -> dict:
     command = [
         sys.executable,
         str(ROOT / "atlas.py"),
@@ -482,6 +518,8 @@ def execute_job(case: dict, configuration: str, target: str, seed: int, env: dic
         target,
         str(seed),
     ]
+    if artifact_root is not None:
+        command.extend(["--artifact-root", str(artifact_root.resolve())])
     try:
         with subprocess.Popen(
             command,
@@ -501,9 +539,27 @@ def execute_job(case: dict, configuration: str, target: str, seed: int, env: dic
                     pass
                 execution.communicate()
                 raise
+            except BaseException:
+                try:
+                    os.killpg(execution.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                execution.communicate()
+                raise
             if execution.returncode:
                 raise RuntimeError(stderr[-4000:])
             result = json.loads(stdout)
+            expected = {
+                "case_id": case["id"],
+                "configuration_id": configuration,
+                "target": target,
+                "seed": seed,
+                "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
+            }
+            if not isinstance(result, dict) or any(
+                key in result and result[key] != value for key, value in expected.items()
+            ):
+                raise RuntimeError("Worker identity or budget mismatch")
     except subprocess.TimeoutExpired:
         result = {
             "status": "timeout",
@@ -527,71 +583,7 @@ def execute_job(case: dict, configuration: str, target: str, seed: int, env: dic
 
 
 def retry_timeouts() -> None:
-    path = ROOT / "data/results.json"
-    document = json.loads(path.read_text())
-    if document["suite"] != SUITE or document["protocol"]["configurations"] != CONFIGURATIONS:
-        raise ValueError("Retry requires this suite and unchanged configurations")
-    initial_budget = document["protocol"].get(
-        "initial_worker_timeout_seconds", document["protocol"]["worker_timeout_seconds"]
-    )
-    pending = [
-        i
-        for i, r in enumerate(document["results"])
-        if r["status"] == "timeout"
-        and r.get("worker_timeout_seconds", initial_budget) < WORKER_TIMEOUT_SECONDS
-    ]
-    if not pending:
-        return
-    for case in document["cases"]:
-        if hashlib.sha256((ROOT / case["path"]).read_bytes()).hexdigest() != case["sha256"]:
-            raise ValueError("Retry input hash changed")
-    for package, version in document["environment"]["versions"].items():
-        if importlib.metadata.version(package) != version:
-            raise ValueError("Retry dependency version changed")
-    selected = document["environment"]["cpu_affinity"]
-    if not set(selected) <= os.sched_getaffinity(0):
-        raise ValueError("Original CPU affinity is unavailable")
-    os.sched_setaffinity(0, set(selected))
-    env = dict(os.environ)
-    env.update(document["environment"]["thread_env"])
-    snapshot = ROOT / "data/attempts" / f"{SUITE}-{initial_budget}s.json"
-    snapshot.parent.mkdir(parents=True, exist_ok=True)
-    if not snapshot.exists():
-        snapshot.write_bytes(path.read_bytes())
-    original = json.loads(snapshot.read_text())
-    retry_count = sum(r["status"] == "timeout" for r in original["results"])
-    document["protocol"].update(
-        worker_timeout_seconds=WORKER_TIMEOUT_SECONDS,
-        initial_worker_timeout_seconds=initial_budget,
-        timeout_retry_entries=retry_count,
-        initial_attempt_snapshot=str(snapshot.relative_to(ROOT)),
-    )
-    cases = {c["id"]: c for c in document["cases"]}
-    for index in pending:
-        previous = document["results"][index]
-        result = execute_job(
-            cases[previous["case_id"]],
-            previous["configuration_id"],
-            previous["target"],
-            previous["seed"],
-            env,
-        )
-        result["previous_attempts"] = [previous]
-        document["results"][index] = result
-        document["updated_at"] = datetime.now(UTC).isoformat()
-        temporary = path.with_suffix(".json.tmp")
-        temporary.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
-        temporary.replace(path)
-        print(
-            json.dumps(
-                {
-                    "retried": sum("previous_attempts" in r for r in document["results"]),
-                    "scheduled": retry_count,
-                    "result": result,
-                }
-            ),
-            flush=True,
-        )
+    raise RuntimeError("New campaigns cannot retry or resume; create a fresh workspace")
 
 
 def read_completed_results(log: Path, jobs: list) -> list[dict]:
@@ -615,26 +607,21 @@ def read_completed_results(log: Path, jobs: list) -> list[dict]:
 
 
 def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> None:
-    results_path = ROOT / "data" / "results.json"
-    if results_path.exists():
-        previous = json.loads(results_path.read_text())
-        if previous["suite"] != SUITE:
-            archive = ROOT / "releases" / previous["suite"] / "data" / "results.json"
-            if not archive.exists() or archive.read_bytes() != results_path.read_bytes():
-                raise RuntimeError("Archive the existing release before changing suites")
-        elif not overwrite:
-            raise RuntimeError(
-                "Results already exist; use --overwrite to explicitly rerun this suite"
-            )
+    from campaign import finish, input_cases, validate_record, validate_workspace
+
+    if overwrite or resume_log is not None:
+        raise RuntimeError("New campaigns cannot overwrite or resume")
+    if (ROOT / "data/results.json").exists():
+        raise RuntimeError("Existing results are protected; use campaign --into a new directory")
+    spec = validate_workspace(ROOT)
+    with (ROOT / "RUN_STARTED").open("x") as stream:
+        stream.write(datetime.now(UTC).isoformat() + "\n")
     if not hasattr(os, "sched_setaffinity"):
         raise RuntimeError("This pilot requires Linux CPU affinity")
     allowed = sorted(os.sched_getaffinity(0))
     selected = allowed[0]
     os.sched_setaffinity(0, {selected})
-    cases = generate_inputs()
-    (ROOT / "data" / "manifest.json").write_text(
-        json.dumps(cases, indent=2, ensure_ascii=False) + "\n"
-    )
+    cases = input_cases(ROOT)
     jobs = [
         (case, compiler, target, seed)
         for case in cases
@@ -656,17 +643,20 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
             ]
         }
     )
-    results = read_completed_results(resume_log, jobs) if resume_log else []
-    resumed_entries = len(results)
-    resume_hash = hashlib.sha256(resume_log.read_bytes()).hexdigest() if resume_log else None
-    for case, compiler, target, seed in jobs[resumed_entries:]:
-        result = execute_job(case, compiler, target, seed, env)
-        results.append(result)
-        # Persist complete outcomes in the run log even if the long batch is interrupted.
-        print(
-            json.dumps({"completed": len(results), "scheduled": len(jobs), "result": result}),
-            flush=True,
-        )
+    results = []
+    resumed_entries = 0
+    resume_hash = None
+    with (ROOT / "data/run.jsonl").open("x") as log:
+        for case, compiler, target, seed in jobs:
+            result = execute_job(case, compiler, target, seed, env)
+            validate_record(ROOT, result, case, compiler, target, seed)
+            results.append(result)
+            entry = json.dumps(
+                {"completed": len(results), "scheduled": len(jobs), "result": result}
+            )
+            log.write(entry + "\n")
+            log.flush()
+            print(entry, flush=True)
     cpu = next(
         (
             line.split(":", 1)[1].strip()
@@ -678,6 +668,8 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
     document = {
         "schema_version": 2,
         "suite": SUITE,
+        "campaign_id": spec["campaign_id"],
+        "source_commit": spec["source_commit"],
         "created_at": datetime.now(UTC).isoformat(),
         "formal_ranking": False,
         "environment": {
@@ -699,7 +691,16 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
             },
             "versions": {
                 p: importlib.metadata.version(p)
-                for p in ["qiskit", "pytket", "pytket-qiskit", "mqt.qcec", "bqskit", "bqskitrs"]
+                for p in [
+                    *SDK_PACKAGES.values(),
+                    "pytket-qiskit",
+                    "mqt.qcec",
+                    "bqskitrs",
+                    "mqt.core",
+                ]
+            },
+            "distributions": {
+                d.metadata["Name"]: d.version for d in importlib.metadata.distributions()
             },
             "exclusive_machine": False,
             "memory_limit_enforced": False,
@@ -708,6 +709,11 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
             "seeds": SEEDS,
             "timing_repeats": REPEATS,
             "compilers": COMPILERS,
+            "sdk_packages": SDK_PACKAGES,
+            "qmap_pipeline": configuration_for("qmap-sc-heuristic-maponly-v1")["recipe"],
+            "qmap_seed_note": (
+                "No mapper seed API; slots 7/19/43 are independent repetitions, not RNG seeds."
+            ),
             "configurations": CONFIGURATIONS,
             "reference_configuration": REFERENCE_CONFIGURATION,
             "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
@@ -749,19 +755,39 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
         "cases": cases,
         "results": results,
     }
-    (ROOT / "data" / "results.json").write_text(
-        json.dumps(document, indent=2, ensure_ascii=False) + "\n"
-    )
+    finish(ROOT, document)
+
+
+def _terminate(_signum, _frame):
+    raise KeyboardInterrupt("Campaign terminated; incomplete workspace retained")
 
 
 def main() -> None:
+    signal.signal(signal.SIGTERM, _terminate)
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["run", "worker", "retry-timeouts"])
+    parser.add_argument("action", choices=["campaign", "run", "worker", "retry-timeouts"])
     parser.add_argument("args", nargs="*")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--resume-log", type=Path)
+    parser.add_argument("--into", type=Path)
+    parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument(
+        "--artifact-root", type=Path, help="Diagnostic outputs only, never campaign data"
+    )
     options = parser.parse_args()
-    if options.action == "run":
+    if options.action != "campaign" and (options.into is not None or options.prepare_only):
+        parser.error("--into and --prepare-only require campaign")
+    if options.action != "worker" and (options.args or options.artifact_root is not None):
+        parser.error("Worker arguments and --artifact-root require worker")
+    if options.action == "campaign" and (options.overwrite or options.resume_log is not None):
+        parser.error("Campaigns cannot overwrite or resume")
+    if options.action == "campaign":
+        from campaign import create
+
+        if options.into is None:
+            parser.error("campaign requires --into")
+        print(create(options.into, prepare_only=options.prepare_only))
+    elif options.action == "run":
         run_pilot(overwrite=options.overwrite, resume_log=options.resume_log)
     elif options.action == "retry-timeouts":
         retry_timeouts()
@@ -769,7 +795,21 @@ def main() -> None:
         case_id, compiler, target, seed = options.args
         manifest = json.loads((ROOT / "data" / "manifest.json").read_text())
         case = next(c for c in manifest if c["id"] == case_id)
-        print(json.dumps(worker(case, compiler, target, int(seed))))
+        from campaign import validate_worker
+        from qmap_adapter import CompilationError
+
+        if options.artifact_root is None:
+            validate_worker(ROOT, case, compiler, target, int(seed))
+        else:
+            destination = options.artifact_root.resolve()
+            protected = [ROOT / "data", ROOT / "releases", ROOT.with_name("transpiler-atlas")]
+            if any(destination.is_relative_to(path.resolve()) for path in protected):
+                raise ValueError("Protected diagnostic output location")
+        try:
+            result = worker(case, compiler, target, int(seed), artifact_root=options.artifact_root)
+        except CompilationError as error:
+            result = {"status": "error", "error_kind": error.reason, "error": str(error)}
+        print(json.dumps(result))
 
 
 if __name__ == "__main__":

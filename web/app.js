@@ -12,7 +12,8 @@ const geometricMean = values => Math.exp(values.reduce((a, b) => a + Math.log(b)
 const esc = value => String(value).replace(/[&<>"']/g, c => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
-const sdkNames = { qiskit: 'Qiskit', pytket: 'pytket', bqskit: 'BQSKit' };
+const sdkNames = { qiskit: 'Qiskit', pytket: 'pytket', bqskit: 'BQSKit', qmap: 'MQT QMAP' };
+const sdkVersion = sdk => data.environment.versions[data.protocol.sdk_packages?.[sdk] ?? sdk];
 const legacyLabels = { qiskit: 'Preset level 2', pytket: 'Peephole + mapping + rebase', bqskit: 'Level 1 · 2Q blocks' };
 const specs = data.protocol.configurations ?? data.protocol.compilers.map(compiler => ({ id: compiler, compiler, label: legacyLabels[compiler] }));
 const compilerIds = specs.map(c => c.id);
@@ -213,7 +214,7 @@ function numberCell(row, key, options = {}) {
   return `<td class="num${selected ? ' selected-metric' : ''}${provisional ? ' unverified-metric' : ''}${penalized ? ' penalized-score' : ''}"${tooltip ? ' title="' + esc(tooltip) + '"' : ''}>${scored ? scoreContent(row, key) : value(row[key], key)}${status}${options.matrix ? approximationTag(row.compiler) : ''}</td>`;
 }
 function nameCell(compiler, detailed) {
-  return `<span class="compiler-name"><i class="dot ${sdkFor(compiler)}"></i>${label(compiler)}</span>${detailed ? '<span class="sub mono">' + esc(data.environment.versions[sdkFor(compiler)]) + '</span>' : ''}<span class="sub">${esc(configurations[compiler])} ${approximationTag(compiler)}</span>`;
+  return `<span class="compiler-name"><i class="dot ${sdkFor(compiler)}"></i>${label(compiler)}</span>${detailed ? '<span class="sub mono">' + esc(sdkVersion(sdkFor(compiler))) + '</span>' : ''}<span class="sub">${esc(configurations[compiler])} ${approximationTag(compiler)}</span>`;
 }
 function renderLeaderboard(items, compilers) {
   const rows = compilerRows(items, compilers).sort(compare);
@@ -390,9 +391,11 @@ $('footer-meta').textContent = `${data.suite} · rz / sx / x / cx · ${data.envi
 const env = data.environment;
 const fields = [
   ['CPU', env.cpu], ['Affinity', env.cpu_affinity.join(', ')], ['OS', env.platform],
+  ...(data.campaign_id ? [['Campaign', data.campaign_id]] : []),
   ['Versions', Object.entries(env.versions).map(([k, v]) => k + ' ' + v).join(' · ')],
   ['Qiskit', data.protocol.qiskit_pipeline], ['pytket', Array.isArray(data.protocol.pytket_pipeline) ? data.protocol.pytket_pipeline.join(' → ') : JSON.stringify(data.protocol.pytket_pipeline)],
   ...(data.protocol.bqskit_pipeline ? [['BQSKit', JSON.stringify(data.protocol.bqskit_pipeline)]] : []),
+  ...(data.protocol.qmap_pipeline ? [['MQT QMAP', JSON.stringify(data.protocol.qmap_pipeline)], ['QMAP seed', data.protocol.qmap_seed_note], ['QMAP timer', 'Includes required MQT-to-Qiskit conversion and native basis lowering; no Qiskit optimization or routing.']] : []),
   ['Targets', 'Atlas-designed synthetic targets, not a named device or a corpus requirement. Input-width line or all-to-all; bidirectional CX; no added workspace.'],
   ['Score version', scoreVersion + ': performance × QCEC pass rate; a pass-rate penalty is not a measured physical error.'],
   ['Worker budget', `${data.protocol.worker_timeout_seconds} s per circuit/configuration/target/seed worker, including three compilations, checks, and startup/shutdown; not a per-compilation timeout.`],

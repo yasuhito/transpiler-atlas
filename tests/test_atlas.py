@@ -132,17 +132,17 @@ def test_corpus_allows_disjoint_gates_after_readout(tmp_path):
     assert circuit.num_clbits == 0
 
 
-def test_existing_suite_requires_explicit_overwrite(tmp_path, monkeypatch):
+def test_existing_suite_cannot_be_overwritten(tmp_path, monkeypatch):
     (tmp_path / "data").mkdir()
     (tmp_path / "data/results.json").write_text(json.dumps({"suite": atlas.SUITE}))
     monkeypatch.setattr(atlas, "ROOT", tmp_path)
-    with pytest.raises(RuntimeError, match="--overwrite"):
+    with pytest.raises(RuntimeError, match="protected"):
         atlas.run_pilot()
 
 
-def test_suite_change_requires_matching_archive(tmp_path, monkeypatch):
+def test_historical_suite_is_protected_without_archive_or_relabel(tmp_path, monkeypatch):
     (tmp_path / "data").mkdir()
     (tmp_path / "data/results.json").write_text('{"suite": "pilot-v0.1"}')
     monkeypatch.setattr(atlas, "ROOT", tmp_path)
-    with pytest.raises(RuntimeError, match="Archive"):
+    with pytest.raises(RuntimeError, match="protected"):
         atlas.run_pilot()
