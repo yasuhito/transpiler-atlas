@@ -14,17 +14,22 @@ from atlas import SUITE, configuration_annotations
 
 ROOT = Path(__file__).resolve().parent
 SCORE_VERSION = "qcec-adjusted-v1"
+PARTIAL_SCORE_VERSION = "qcec-adjusted-partial-v2"
 
 
 def display_data(data: dict, annotations: dict | None = None) -> tuple[dict, dict]:
     """Overlay explanatory fields on a copy, leaving campaign records untouched."""
     notes = configuration_annotations() if annotations is None else annotations
     display = copy.deepcopy(data)
-    display["score_version"] = SCORE_VERSION
+    standalone = data.get("kind") == "compile-retention"
+    score_version = PARTIAL_SCORE_VERSION if standalone else SCORE_VERSION
+    display["score_version"] = score_version
     configurations = display["protocol"].get("configurations", [])
     ids = [configuration["id"] for configuration in configurations]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate configuration ID")
+    if standalone and annotations is None:
+        notes = {key: value for key, value in notes.items() if key in ids}
     if notes.keys() - set(ids):
         # Historical SDK-only fixtures have no configuration annotations.
         if annotations is not None or configurations or "configurations" in display["protocol"]:
@@ -42,12 +47,13 @@ def display_data(data: dict, annotations: dict | None = None) -> tuple[dict, dic
         next(c for c in configurations if c["id"] == identifier).update(note)
     sidecar = {
         "suite": data["suite"],
-        "score_version": SCORE_VERSION,
+        "score_version": score_version,
         "protocol": {"configurations": [{"id": key, **note} for key, note in notes.items()]},
     }
     for row in display["results"]:
         for trial in row.get("trials", []):
-            trial["validation"].pop("details", None)
+            if trial.get("validation") is not None:
+                trial["validation"].pop("details", None)
     return display, sidecar
 
 

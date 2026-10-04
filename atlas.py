@@ -549,6 +549,13 @@ def execute_job(
     *,
     artifact_root: Path | None = None,
 ) -> dict:
+    spec_path = ROOT / "campaign.json"
+    if artifact_root is None and spec_path.exists():
+        spec = json.loads(spec_path.read_text())
+        if spec.get("spec_format_version") == 3:
+            from retention_campaign import execute_job as execute_retained
+
+            return execute_retained(ROOT, case, configuration, target, seed, env)
     command = [
         sys.executable,
         str(ROOT / "atlas.py"),
@@ -803,7 +810,9 @@ def _terminate(_signum, _frame):
 def main() -> None:
     signal.signal(signal.SIGTERM, _terminate)
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["campaign", "run", "worker"])
+    parser.add_argument(
+        "action", choices=["campaign", "run", "worker", "retention-campaign", "retention-run"]
+    )
     parser.add_argument("args", nargs="*")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--resume-log", type=Path)
@@ -816,15 +825,29 @@ def main() -> None:
         "--artifact-root", type=Path, help="Diagnostic outputs only, never campaign data"
     )
     options = parser.parse_args()
-    if options.action != "campaign" and (
+    if options.action not in {"campaign", "retention-campaign"} and (
         options.into is not None or options.prepare_only or options.inherit_file_map is not None
     ):
         parser.error("--into, --prepare-only and --inherit-file-map require campaign")
+    if options.action.startswith("retention-") and (
+        options.overwrite or options.resume_log is not None or options.inherit_file_map is not None
+    ):
+        parser.error("Standalone campaigns cannot overwrite, resume or inherit a FileMap")
     if options.action != "worker" and (options.args or options.artifact_root is not None):
         parser.error("Worker arguments and --artifact-root require worker")
     if options.action == "campaign" and (options.overwrite or options.resume_log is not None):
         parser.error("Campaigns cannot overwrite or resume")
-    if options.action == "campaign":
+    if options.action == "retention-campaign":
+        from retention_campaign import create
+
+        if options.into is None:
+            parser.error("retention-campaign requires --into")
+        print(create(options.into, prepare_only=options.prepare_only))
+    elif options.action == "retention-run":
+        from retention_campaign import run
+
+        run(ROOT)
+    elif options.action == "campaign":
         from campaign import create
 
         if options.into is None:

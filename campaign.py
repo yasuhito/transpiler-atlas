@@ -379,12 +379,17 @@ def finish(root, document):
 
 def validate_completed(root, resolve=None):
     root = Path(root)
+    native = resolve is None
     resolve = resolve or (lambda name: relative_file(root, name))
     marker = resolve("MEASUREMENT_COMPLETE").read_text().strip()
     if marker != digest(resolve("snapshot-manifest.json")):
         raise ValueError("Measurement seal mismatch")
     snapshot = json.loads(resolve("snapshot-manifest.json").read_text())
     version = snapshot.get("seal_format_version", 1)
+    if version == 3 and snapshot.get("kind") == "compile-retention":
+        from retention_campaign import validate_completed as validate_retention
+
+        return validate_retention(root, None if native else resolve)
     if version not in {1, 2} or (version == 2 and snapshot.get("kind") != "cirq-mixed"):
         raise ValueError("Unknown seal format")
     for name, expected in snapshot["files"].items():

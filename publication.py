@@ -33,6 +33,7 @@ def load(root, *, file_map=None):
     data = json.loads(resolve("data/results.json").read_text())
     for row in data["results"]:
         for trial in row.get("trials", []):
-            if resolve(trial["artifact"]) != relative_file(root, trial["artifact"]):
-                raise ValueError("Published artifact link does not resolve to the sealed bytes")
+            for key in ("artifact", "qpy_artifact", "compile_manifest"):
+                if key in trial and resolve(trial[key]) != relative_file(root, trial[key]):
+                    raise ValueError("Published artifact link does not resolve to the sealed bytes")
     return data, raw_path
