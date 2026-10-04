@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Compile retention diagnostic | Transpiler Atlas</title>
+  <script src="__ROOT__web/theme.js"></script>
+  <link rel="stylesheet" href="__ROOT__web/theme.css">
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+    main{max-width:1440px;margin:auto;padding:32px 24px}a{color:var(--accent);text-underline-offset:3px}nav{display:flex;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:20px}
+    h1{font-size:30px;line-height:1.3}.notice{padding:16px;border:1px solid var(--border);background:var(--surface)}.muted{color:var(--muted)}code{font-size:12px;overflow-wrap:anywhere}.table-scroll{overflow:auto;margin:24px 0}table{border-collapse:collapse;width:100%;min-width:1100px}th,td{padding:12px;border:1px solid var(--border);text-align:left;vertical-align:top}th{background:var(--surface)}caption{text-align:left;margin-bottom:12px}.status{color:var(--warning, #b88724)}details{margin-top:8px}footer{border-top:1px solid var(--border);padding-top:20px}@media(max-width:600px){main{padding:20px 16px}h1{font-size:26px}}
+  </style>
+</head>
+<body><main>
+  <nav aria-label="Diagnostic navigation"><a href="__ROOT__index.html">Results</a><a href="__ROOT__docs/retention.html">Retention protocol</a><a href="__ROOT__docs/publication.html">Publication ownership</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav>
+  <h1>Compile retention diagnostic</h1>
+  <p id="diagnostic-summary">__SUMMARY__</p>
+  <p class="notice">Compilation evidence, not a correctness ranking. Saved output rules and equivalence are separate. Verification incomplete is not an explicit mismatch. All 18 identities remain in the schedule, including unsuccessful checks. Quality and Speed are N/A because this standalone diagnostic has no reference rows; raw measurements remain available.</p>
+  <p>QASMBench Ising n10, BQSKit L2/L3/L4, line/all-to-all, seeds 7/19/43. One monotonic 420 s job deadline; compile all three repeats before fresh QCEC checks capped at min(60 s, remaining job time), cooperative timeout 20 s. QCEC 3.10.1. No retries or historical backfill. Shared-host timings are diagnostic, not matched-host performance comparisons.</p>
+  <p class="muted">__ENVIRONMENT__</p>
+  <p id="identity-caption">All 18 scheduled identities in frozen execution order. Medians use committed repeats; coverage is shown explicitly. Compile and check times are seconds. Scroll the table horizontally on narrow screens to see outcomes and artifacts.</p>
+  <div class="table-scroll" role="region" aria-label="All scheduled identities" tabindex="0"><table aria-describedby="identity-caption"><thead><tr><th>Order / circuit</th><th>Topology</th><th>BQSKit level / seed</th><th>Outcome</th><th>Saved / accepted</th><th>2Q / 2Q depth</th><th>1Q / full depth</th><th>Compile median</th><th>Checks and saved artifacts</th></tr></thead><tbody id="diagnostic-identity-rows">__ROWS__</tbody></table></div>
+  <p>Matching 2Q count/depth does not mean identical circuits or verified equivalence. Input and these outputs retain 90 CX gates on the nine nearest-neighbor edges and 20 two-qubit-only layers. One-qubit counts and full depths vary, including larger L4 values. Native QPY preserves the actual returned circuit and scalar phase.</p>
+  <footer>__EVIDENCE__</footer>
+</main></body>
+</html>
