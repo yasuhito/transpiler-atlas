@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { siteData } from './site-data.mjs';
 import http from 'node:http';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
 const root = process.cwd();
-const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/results.json'), 'utf8'));
+const raw = siteData(root);
 const bqId = raw.protocol.configurations ? 'bqskit-l1' : 'bqskit';
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const server = http.createServer((request, response) => {

@@ -76,6 +76,6 @@ Build the site only from a completed workspace:
 /path/to/source/.venv/bin/python /path/to/new-workspace/build_site.py
 ```
 
-The builder verifies the measurement seal, raw/spec/manifest identity and hashes, and same-workspace links before publishing derived HTML and the display-only sidecar. Rebuilding derived files is allowed; changing measurements is not. The raw download, embedded data and sidecar refer to the same campaign. No fake new-suite results are generated for the current historical site.
+The builder verifies the measurement seal, raw/spec/manifest identity and hashes, and same-workspace links before publishing derived HTML and the display-only sidecar. Rebuilding derived files is allowed; changing measurements is not. The raw download, embedded data and sidecar refer to the same campaign. The repository root can publish the sealed mixed-source dataset through the [publication file map](publication.md), without replacing historical raw data.
 
 The old `data/results.json`, `data/attempts`, releases and their 120/600-second provenance remain unchanged. Quality and Speed remain `qcec-adjusted-v1` with the unchanged v0.4 Qiskit L2 reference, nested medians, coverage, N/A and pass-rate rules. The site prominently labels mixed budgets and measurement windows. Timing and acceptance comparisons are not matched-budget evidence. Mapping-only and stock preset optimization are different recipes, not equal SDK effort.

@@ -10,11 +10,12 @@ QMAP_SOURCE = "qmap420"
 LEGACY_RESULTS = "history/pilot-v0.4/data/results.json"
 
 
-def load_legacy(root):
+def load_legacy(root, resolve=None):
     from atlas import CONFIGURATIONS, REPEATS, SEEDS
     from campaign import relative_file
 
-    legacy = json.loads(relative_file(Path(root), LEGACY_RESULTS).read_text())
+    resolve = resolve or (lambda name: relative_file(Path(root), name))
+    legacy = json.loads(resolve(LEGACY_RESULTS).read_text())
     configs = [c for c in CONFIGURATIONS if c["compiler"] != "qmap"]
     protocol = legacy["protocol"]
     if (
@@ -51,7 +52,7 @@ def load_legacy(root):
             for previous in row.get("previous_attempts", [])
         ):
             raise ValueError("Legacy previous-attempt budget mismatch")
-    relative_file(Path(root) / "history/pilot-v0.4", protocol["initial_attempt_snapshot"])
+    resolve("history/pilot-v0.4/" + protocol["initial_attempt_snapshot"])
     return legacy
 
 
@@ -66,12 +67,13 @@ def record_budget_seconds(document, row):
     )
 
 
-def combine(root, qmap):
+def combine(root, qmap, resolve=None):
     import atlas
-    from campaign import digest
+    from campaign import digest, relative_file
 
     root = Path(root)
-    legacy = load_legacy(root)
+    resolve = resolve or (lambda name: relative_file(root, name))
+    legacy = load_legacy(root, resolve)
     if legacy["cases"] != qmap["cases"]:
         raise ValueError("Cannot combine different frozen inputs")
     for key in (
@@ -120,7 +122,7 @@ def combine(root, qmap):
             "kind": "reused",
             "records": len(legacy["results"]),
             "results_path": LEGACY_RESULTS,
-            "results_sha256": digest(root / LEGACY_RESULTS),
+            "results_sha256": digest(resolve(LEGACY_RESULTS)),
             "created_at": legacy["created_at"],
             "updated_at": legacy.get("updated_at"),
             "protocol": copy.deepcopy(legacy["protocol"]),
@@ -131,7 +133,7 @@ def combine(root, qmap):
             "kind": "new",
             "records": len(qmap["results"]),
             "results_path": "data/qmap-results.json",
-            "results_sha256": digest(root / "data/qmap-results.json"),
+            "results_sha256": digest(resolve("data/qmap-results.json")),
             "created_at": qmap["created_at"],
             "protocol": copy.deepcopy(qmap["protocol"]),
             "environment": copy.deepcopy(qmap["environment"]),
@@ -157,15 +159,16 @@ def combine(root, qmap):
     return data
 
 
-def validate_combined(root, combined):
+def validate_combined(root, combined, resolve=None):
     from campaign import digest, relative_file
 
     root = Path(root)
-    qmap = json.loads(relative_file(root, "data/qmap-results.json").read_text())
-    if combined != combine(root, qmap):
+    resolve = resolve or (lambda name: relative_file(root, name))
+    qmap = json.loads(resolve("data/qmap-results.json").read_text())
+    if combined != combine(root, qmap, resolve):
         raise ValueError("Combined records or provenance changed")
     for source in combined["protocol"]["measurement_sources"].values():
-        if digest(relative_file(root, source["results_path"])) != source["results_sha256"]:
+        if digest(resolve(source["results_path"])) != source["results_sha256"]:
             raise ValueError("Measurement source digest mismatch")
     return qmap
 

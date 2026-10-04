@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { siteData } from './site-data.mjs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 const root = process.cwd();
 const url = pathToFileURL(path.join(root, 'index.html')).href;
-const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/results.json'), 'utf8'));
+const raw = siteData(root);
 const specs = raw.protocol.configurations ?? raw.protocol.compilers.map(compiler => ({ id: compiler, compiler }));
 const compilers = specs.map(c => c.id);
 const aliases = { qiskit: raw.protocol.reference_configuration ?? 'qiskit', pytket: raw.protocol.configurations ? 'pytket-peephole' : 'pytket', bqskit: raw.protocol.configurations ? 'bqskit-l1' : 'bqskit' };

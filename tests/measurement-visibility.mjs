@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import { siteData } from './site-data.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
-const raw = JSON.parse(fs.readFileSync('data/results.json', 'utf8'));
+const raw = siteData();
 const bqId = raw.protocol.configurations ? 'bqskit-l1' : 'bqskit';
 const refId = raw.protocol.reference_configuration ?? 'qiskit';
 const ids = raw.protocol.configurations?.map(c => c.id) ?? raw.protocol.compilers;

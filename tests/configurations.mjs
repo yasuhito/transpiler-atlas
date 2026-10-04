@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { siteData } from './site-data.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
-const raw = JSON.parse(fs.readFileSync('data/results.json', 'utf8'));
-assert.equal(raw.protocol.configurations.length, 11);
+const raw = siteData();
+const count = raw.protocol.configurations.length;
+assert.equal(count, 12);
 assert.equal(raw.protocol.reference_configuration, 'qiskit-l2');
-assert.equal(raw.results.length, raw.cases.length * 11 * 2 * raw.protocol.seeds.length);
+assert.equal(raw.results.length, raw.cases.length * count * 2 * raw.protocol.seeds.length);
 assert.equal(new Set(raw.results.map(r => [r.case_id, r.target, r.configuration_id, r.seed].join(':'))).size, raw.results.length);
 for (const r of raw.results) {
   const spec = raw.protocol.configurations.find(c => c.id === r.configuration_id);
@@ -24,9 +26,9 @@ try {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   const url = pathToFileURL(path.resolve('index.html')).href;
   await page.goto(url);
-  assert.equal(await page.locator('#result-rows tr').count(), 11);
-  assert.equal(await page.locator('#suite-version').innerText(), 'Pilot v0.4');
-  assert.match(await page.locator('#dataset-meta').innerText(), /3 SDKs · 11 configurations/);
+  assert.equal(await page.locator('#result-rows tr').count(), count);
+  assert.equal(await page.locator('#suite-version').innerText(), 'Pilot v0.5-qmap-mixed-budgets');
+  assert.match(await page.locator('#dataset-meta').innerText(), /4 SDKs · 12 configurations/);
   const ref = () => page.locator('#result-rows tr[data-compiler="qiskit-l2"] .score-value').first();
   assert.equal(await ref().innerText(), '100.0');
   const annotated = ['bqskit-l2', 'bqskit-l3', 'bqskit-l4'];
@@ -61,7 +63,7 @@ try {
   assert.equal(await page.locator('#approximation-note').isVisible(), true);
   await page.locator('#environment summary').click();
   assert.match(await page.locator('#environment-fields').innerText(), /Configuration note: bqskit-l4/);
-  assert.equal(await page.getByRole('link', { name: 'Configuration notes (display metadata)' }).getAttribute('href'), 'data/configuration-notes.json');
+  assert.equal(await page.getByRole('link', { name: 'Configuration notes (display metadata)' }).getAttribute('href'), JSON.parse(fs.readFileSync('publication.json')).file_map.replace('file-map.json', 'data/configuration-notes.json'));
   await page.goto(url);
   await page.evaluate(() => {
     for (const c of specs) { delete c.numerical_approximation; delete c.approximation_note; }
@@ -130,11 +132,11 @@ try {
   assert.equal(await page.locator('#configuration').inputValue(), 'all');
   assert.equal(await page.locator('#result-rows tr').count(), 4);
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
-  assert.equal(await page.locator('#result-rows tr').count(), 11);
+  assert.equal(await page.locator('#result-rows tr').count(), count);
   await page.screenshot({ path: '/tmp/transpiler-atlas-configurations.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: '/tmp/transpiler-atlas-configurations-mobile.png', fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('Configuration checks passed: 11 measured entries, distinct artifacts, SDK/effort filtering, fixed reference, permalinks, all views, mobile.');
+  console.log('Configuration checks passed: 12 mixed-source entries, distinct artifacts, SDK/effort filtering, fixed reference, permalinks, all views, mobile.');
 } finally { await browser.close(); }

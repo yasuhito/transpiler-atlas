@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { siteData } from './site-data.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
@@ -47,8 +48,8 @@ try {
     evidence.qmap.push({ target, ...summaries.find(r => r.compiler === 'qmap-sc-heuristic-maponly-v1') });
   }
   assert.equal(await after.locator('#result-rows tr').count(), 12);
-  const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/results.json')));
-  const oldRaw = JSON.parse(fs.readFileSync(path.join(baseline, 'data/results.json')));
+  const raw = siteData(root);
+  const oldRaw = siteData(baseline);
   assert.deepEqual(raw.results.slice(0, 792), oldRaw.results);
   evidence.passed = true;
   evidence.scope = 'Actual browser app.js aggregate, scoreCases, compilerRows, value and compare across every nonempty target/family/width selection; old-only ranks, all raw records exact. Absolute ranks with QMAP may change.';

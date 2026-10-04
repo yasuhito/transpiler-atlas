@@ -121,7 +121,14 @@ def create(into, *, prepare_only=False):
         shutil.copyfile(source / case["path"], root / case["path"])
     # Historical documentation remains truthful without linking old text to new measurements.
     history = root / "history/pilot-v0.4/data"
+    legacy = json.loads((source / "data/results.json").read_text())
+    legacy_artifacts = {t["artifact"] for r in legacy["results"] for t in r.get("trials", [])}
     for file in sorted((source / "data").rglob("*")):
+        name = str(file.relative_to(source))
+        if name.startswith("data/campaigns/") or (
+            name.startswith("data/outputs/") and name not in legacy_artifacts
+        ):
+            continue
         if file.is_file():
             old = relative_file(source, str(file.relative_to(source)))
             new = history / file.relative_to(source / "data")
@@ -340,20 +347,21 @@ def finish(root, document):
         stream.write(digest(root / "snapshot-manifest.json") + "\n")
 
 
-def validate_completed(root):
+def validate_completed(root, resolve=None):
     root = Path(root)
-    marker = relative_file(root, "MEASUREMENT_COMPLETE").read_text().strip()
-    if marker != digest(relative_file(root, "snapshot-manifest.json")):
+    resolve = resolve or (lambda name: relative_file(root, name))
+    marker = resolve("MEASUREMENT_COMPLETE").read_text().strip()
+    if marker != digest(resolve("snapshot-manifest.json")):
         raise ValueError("Measurement seal mismatch")
-    snapshot = json.loads((root / "snapshot-manifest.json").read_text())
+    snapshot = json.loads(resolve("snapshot-manifest.json").read_text())
     for name, expected in snapshot["files"].items():
-        if digest(relative_file(root, name)) != expected:
+        if digest(resolve(name)) != expected:
             raise ValueError(f"Snapshot hash mismatch: {name}")
     from mixed_sources import validate_combined
 
-    raw = json.loads((root / "data/results.json").read_text())
-    qmap = validate_combined(root, raw)
-    spec = json.loads((root / "campaign.json").read_text())
+    raw = json.loads(resolve("data/results.json").read_text())
+    qmap = validate_combined(root, raw, resolve)
+    spec = json.loads(resolve("campaign.json").read_text())
     if not (
         raw["campaign_id"] == snapshot["campaign_id"] == spec["campaign_id"]
         and raw["suite"] == snapshot["suite"] == spec["suite"]
