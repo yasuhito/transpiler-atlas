@@ -1,0 +1,12 @@
+extend = "../../pyproject.toml"
+
+[lint.isort]
+known-first-party = [
+  "atlas",
+  "build_site",
+  "campaign",
+  "cirq_adapter",
+  "mixed_sources",
+  "publication",
+  "qmap_adapter",
+]

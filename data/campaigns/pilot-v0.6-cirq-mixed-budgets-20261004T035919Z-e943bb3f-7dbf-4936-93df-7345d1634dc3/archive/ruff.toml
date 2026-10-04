@@ -1,0 +1,2 @@
+# Repository lint configuration, not a sealed measurement source.
+extend = "../../ruff.toml"
