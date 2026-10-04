@@ -19,7 +19,11 @@
     blockquote{border-left:3px solid #8d77e5;padding-left:20px;color:var(--muted)}
     @media(max-width:600px){main{padding:20px}h1{font-size:26px}}
     </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="sealed-mixed-source-publication">Sealed mixed-source publication</h1>
-<h2 id="cirq-extension-not-yet-published">Cirq extension, not yet published</h2>
+<h2 id="current-cirq-v2-publication">Current Cirq v2 publication</h2>
+<p>The current selector serves 936 records, 13 configurations and three sources.
+The historical QMAP-only cohort below had 12 configurations; that is not the
+current root report's configuration count. The root <code>data/results.json</code> still
+contains the original v0.4 bytes.</p>
 <p>The maintained reader accepts the existing QMAP v1 seal using its own sealed
 12-configuration specification, even with 13 configurations in the execution
 registry. It never imports or executes archived Python. Unknown spec or seal
@@ -36,19 +40,19 @@ raw, source, input and artifact files. The builder verifies hashes, recomposes
 three sources and checks artifact links before writing derived pages. Old seals
 are verified under the old protocol, not the live registry. Reruns and partial
 recovery are refused. Missing files, changed hashes and unsafe paths fail closed.</p>
-<p>The current repository <code>publication.json</code>, old raw files, output artifacts,
-archives and snapshots remain untouched. A later separately approved publication
-commit would add a new campaign archive, standalone and combined raw, source-scoped
-file map, and 216 Cirq artifacts under their original new-config paths. Identical
-historical bytes should be referenced in the map instead of duplicated. Only then
-would the selector and derived report/notes change. Local campaign generation is
-not authorization to make that commit, push or publish.</p>
+<p>The approved Cirq publication added its campaign archive, standalone and combined
+raw, source-scoped FileMap and 216 Cirq artifacts under their original new-config
+paths. Identical historical bytes are referenced in the map instead of duplicated.
+It selected the Cirq mixed-source campaign and rebuilt the report/notes, without
+changing old raw records, artifacts or seals. That publication does not authorize
+further measurement, selector changes, pushes or publication.</p>
 <h2 id="preserved-qmap-v1-publication">Preserved QMAP v1 publication</h2>
 <p>GitHub Pages serves the committed repository root. Run <code>python build_site.py</code>
 locally before committing generated HTML. No deployment workflow or server-side
 build is required.</p>
-<p><code>publication.json</code> selects the sealed QMAP campaign through its committed
-<code>file-map.json</code>. The combined raw data and standalone QMAP raw data are new files
+<p>The QMAP v1 publication selected its sealed campaign through a committed
+<code>file-map.json</code>. The current selector has since advanced to the Cirq v2 campaign;
+this section describes the preserved QMAP archive. The combined raw data and standalone QMAP raw data are new files
 under <code>data/campaigns/&lt;campaign_id&gt;/</code>. The original completion marker, snapshot,
 campaign specification, input manifest, run log and frozen source files retain
 their original bytes. These are an archive, not code to execute in place.</p>
@@ -65,8 +69,33 @@ No old artifact is replaced. The root <code>data/results.json</code> remains v0.
 footer provides a separate v0.4 raw link. Data, Raw JSON and the no-JavaScript
 fallback point to the combined raw file. The generated configuration-note sidecar
 is stored next to that combined file; the old sidecar is retained.</p>
-<p>The root report shows 12 configurations and explicitly distinguishes QMAP's new
+<p>The historical QMAP report showed 12 configurations and distinguished QMAP's new
 420-second workers from the reused v0.4 initial 120-second outcomes and 42
 600-second timeout-only retries. This is not a matched-budget rerun. Qiskit L2
 is the unchanged v0.4 reference. Publication does not authorize remeasurement,
-selective retry, push or release creation.</p></main></body></html>
+selective retry, push or release creation.</p>
+<h2 id="standalone-compile-retention-v3-not-yet-published">Standalone compile-retention v3, not yet published</h2>
+<p>The new <code>kind=compile-retention</code> reader handles spec, result schema and seal v3
+as a standalone dataset, never a fourth source merged into the historical rows.
+An explicit precommitted ordered schedule and new execution identities separate
+420/60/20-second retained-compilation diagnostics from the old timeout records.
+QCEC remains 3.10.1; recipes and display configuration IDs are not new evidence
+that the execution identity is unchanged.</p>
+<p>Every scheduled job must have terminal facts. The validator re-derives QPY/native
+output rules, phase/maps, hashes, raw metrics, medians, classification and rollup
+without running QCEC. QASM, actual QPY, compile commit manifests, check replies,
+process cleanup/budget evidence, source/lock/input/license provenance and all
+forensic logs/orphans are sealed. Incomplete verification can be sealed; a
+missing job, cancelled schedule, corrupt bundle or altered file cannot. The
+create-only snapshot is followed last by <code>MEASUREMENT_COMPLETE</code>. A FileMap must
+cover exactly the snapshot files plus snapshot and marker, and artifact links
+must resolve to the same sealed physical bytes.</p>
+<p>A later publication needs separate approval and would add a standalone campaign
+archive, raw result, exact FileMap, QASM/QPY/manifests/logs and a dedicated report
+or standalone selector. It must not backfill the 18 historical identities, replace
+old output files, recompute <code>qcec-adjusted-v1</code>, or rewrite old campaigns, releases,
+attempts or seals. The partial-raw viewer uses <code>qcec-adjusted-partial-v2</code> only for
+this protocol. No reference rows are in the timeout diagnostic, so Quality/Speed
+are N/A for missing reference values, not merely because checks are unfinished.
+Local previews belong outside the checkout and are not committed or published.
+See <a href="retention.html">standalone protocol</a>.</p></main></body></html>
