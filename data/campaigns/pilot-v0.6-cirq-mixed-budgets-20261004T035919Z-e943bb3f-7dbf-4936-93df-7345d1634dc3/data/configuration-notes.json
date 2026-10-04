@@ -1,0 +1,25 @@
+{
+  "suite": "pilot-v0.6-cirq-mixed-budgets",
+  "score_version": "qcec-adjusted-v1",
+  "protocol": {
+    "configurations": [
+      {
+        "id": "bqskit-l2",
+        "numerical_approximation": true,
+        "approximation_note": "Numerical approximation in the stock BQSKit workflow. Strict QCEC acceptance is not guaranteed. The investigated ising_n10 output was not accepted within the worker budget. Individual check results, measurements, and scores are unchanged."
+      },
+      {
+        "id": "bqskit-l3",
+        "numerical_approximation": true,
+        "approximation_note": "Numerical approximation in the stock BQSKit workflow. Strict QCEC acceptance is not guaranteed. The investigated ising_n10 output was not accepted within the worker budget. Individual check results, measurements, and scores are unchanged."
+      },
+      {
+        "id": "bqskit-l4",
+        "numerical_approximation": true,
+        "approximation_note": "Numerical approximation in the stock BQSKit workflow. Strict QCEC acceptance is not guaranteed. The investigated ising_n10 output was not accepted within the worker budget. Individual check results, measurements, and scores are unchanged."
+      }
+    ]
+  },
+  "campaign_id": "pilot-v0.6-cirq-mixed-budgets-20261004T035919Z-e943bb3f-7dbf-4936-93df-7345d1634dc3",
+  "raw_sha256": "3223cf3da2164b44a625b2ea38a7ec722ec8a555a8f5ceb45717f7f9810db5fe"
+}

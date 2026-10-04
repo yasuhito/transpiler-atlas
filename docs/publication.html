@@ -19,6 +19,31 @@
     blockquote{border-left:3px solid #8d77e5;padding-left:20px;color:var(--muted)}
     @media(max-width:600px){main{padding:20px}h1{font-size:26px}}
     </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="sealed-mixed-source-publication">Sealed mixed-source publication</h1>
+<h2 id="cirq-extension-not-yet-published">Cirq extension, not yet published</h2>
+<p>The maintained reader accepts the existing QMAP v1 seal using its own sealed
+12-configuration specification, even with 13 configurations in the execution
+registry. It never imports or executes archived Python. Unknown spec or seal
+versions are rejected. Results <code>schema_version=2</code> is independent of the new
+<code>spec_format_version=2</code> and <code>seal_format_version=2</code> (<code>kind=cirq-mixed</code>).</p>
+<p>A new Cirq workspace preserves the authenticated old publication closure byte for
+byte under <code>history/pilot-v0.5</code> and reuses its 864 records without additions to
+old rows or path rewriting. <code>data/cirq-results.json</code> contains only the new 72
+Cirq entries. <code>data/results.json</code> combines 936 entries across three sources.
+Source ownership determines budget labels: v0.4 initial120/retry600, old QMAP420,
+new Cirq420, with distinct windows. No universal budget is implied.</p>
+<p>The completion marker hashes a snapshot containing both the old closure and new
+raw, source, input and artifact files. The builder verifies hashes, recomposes
+three sources and checks artifact links before writing derived pages. Old seals
+are verified under the old protocol, not the live registry. Reruns and partial
+recovery are refused. Missing files, changed hashes and unsafe paths fail closed.</p>
+<p>The current repository <code>publication.json</code>, old raw files, output artifacts,
+archives and snapshots remain untouched. A later separately approved publication
+commit would add a new campaign archive, standalone and combined raw, source-scoped
+file map, and 216 Cirq artifacts under their original new-config paths. Identical
+historical bytes should be referenced in the map instead of duplicated. Only then
+would the selector and derived report/notes change. Local campaign generation is
+not authorization to make that commit, push or publish.</p>
+<h2 id="preserved-qmap-v1-publication">Preserved QMAP v1 publication</h2>
 <p>GitHub Pages serves the committed repository root. Run <code>python build_site.py</code>
 locally before committing generated HTML. No deployment workflow or server-side
 build is required.</p>
