@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import markdown
 
-from atlas import configuration_annotations
+from atlas import SUITE, configuration_annotations
 
 ROOT = Path(__file__).resolve().parent
 SCORE_VERSION = "qcec-adjusted-v1"
@@ -79,7 +79,7 @@ def build() -> None:
         from campaign import validate_completed
 
         validate_completed(ROOT)
-    elif data["suite"] == "pilot-v0.5-qmap-420s":
+    elif data["suite"] == SUITE:
         raise ValueError("New suite requires a sealed campaign")
     display, sidecar = display_data(data)
     if is_campaign:

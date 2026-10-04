@@ -21,11 +21,16 @@ def synthetic_document(root):
     spec = json.loads((root / "campaign.json").read_text())
     historical = json.loads((atlas.ROOT / "data/results.json").read_text())
     doc = copy.deepcopy(historical)
-    doc.update(suite=atlas.SUITE, campaign_id=spec["campaign_id"], cases=spec["cases"])
+    doc.update(
+        suite=atlas.MEASUREMENT_SUITE,
+        campaign_id=spec["campaign_id"],
+        source_commit=spec["source_commit"],
+        cases=spec["cases"],
+    )
     doc["protocol"].update(
-        configurations=atlas.CONFIGURATIONS,
-        compilers=atlas.COMPILERS,
-        sdk_packages=atlas.SDK_PACKAGES,
+        configurations=atlas.MEASURED_CONFIGURATIONS,
+        compilers=["qmap"],
+        sdk_packages={"qmap": "mqt.qmap"},
         worker_timeout_seconds=atlas.WORKER_TIMEOUT_SECONDS,
         seeds=atlas.SEEDS,
         timing_repeats=atlas.REPEATS,
@@ -53,7 +58,7 @@ def synthetic_document(root):
             "error": "Synthetic test fixture, not measured",
         }
         for case in spec["cases"]
-        for config in atlas.CONFIGURATIONS
+        for config in atlas.MEASURED_CONFIGURATIONS
         for target in ("line", "all-to-all")
         for seed in atlas.SEEDS
     ]
@@ -67,6 +72,8 @@ def test_prepare_create_only_and_fixed_spec(workspace):
     spec = campaign.validate_workspace(workspace)
     assert spec["suite"] == atlas.SUITE
     assert len(spec["configurations"]) == 12
+    assert len(spec["measurement_configurations"]) == 1
+    assert spec["measured_entries"] == 72
     assert spec["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS == 420
     assert not (workspace / "RUN_STARTED").exists()
     assert not (workspace / "data/results.json").exists()
@@ -89,7 +96,9 @@ def test_seal_rebuild_hash_and_closed_links(workspace, monkeypatch):
     doc = synthetic_document(workspace)
     campaign.finish(workspace, doc)
     snapshot = campaign.validate_completed(workspace)
-    assert snapshot["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS
+    assert snapshot["qmap_worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS
+    assert snapshot["measured_entries"] == 72
+    assert snapshot["reused_entries"] == 792
     raw = (workspace / "data/results.json").read_bytes()
     with pytest.raises(FileExistsError):
         campaign.finish(workspace, doc)
@@ -97,6 +106,11 @@ def test_seal_rebuild_hash_and_closed_links(workspace, monkeypatch):
     build_site.build()
     first = (workspace / "index.html").read_bytes()
     notes = json.loads((workspace / "data/configuration-notes.json").read_text())
+    combined = json.loads(raw)
+    legacy = json.loads((atlas.ROOT / "data/results.json").read_text())
+    assert combined["results"][:792] == legacy["results"]
+    assert "worker_timeout_seconds" not in combined["protocol"]
+    assert combined["protocol"]["measurement_sources"]["v0.4"]["protocol"] == legacy["protocol"]
     assert notes["campaign_id"] == doc["campaign_id"]
     assert notes["raw_sha256"] == campaign.digest(workspace / "data/results.json")
     build_site.build()
@@ -145,6 +159,7 @@ def test_reject_duplicate_missing_budget_and_unsafe_paths(workspace):
 def test_artifact_directory_cannot_escape_through_symlink(workspace, monkeypatch):
     outside = workspace.parent / "outside"
     outside.mkdir()
+    (workspace / "data/outputs").rename(workspace / "data/outputs-saved")
     (workspace / "data/outputs").symlink_to(outside, target_is_directory=True)
     monkeypatch.setattr(atlas, "ROOT", workspace)
     case = next(c for c in campaign.input_cases(workspace) if c["id"] == "qft-4q")

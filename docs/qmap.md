@@ -46,7 +46,9 @@ QMAP internal timeout is an error with `error_kind=qmap_internal_timeout`, check
 
 ## New campaign, not a historical rewrite
 
-The next suite is `pilot-v0.5-qmap-420s`: twelve frozen inputs, twelve configurations, two targets and three seed slots, totaling **864 entries**, with up to 2,592 output checks. All configurations must be measured anew. The single execution definition is `atlas.WORKER_TIMEOUT_SECONDS`; protocol, every record, campaign spec and snapshot derive the same **420-second full-worker budget**. It includes imports, parsing, three compilations/checks, export and runtime startup/shutdown, not 420 seconds per compilation.
+Only `qmap-sc-heuristic-maponly-v1` is newly measured: twelve frozen inputs, two targets and three seed slots give **72 worker entries**, three real compilations and strict checks per slot, up to **216 output checks**. Execution is sequential. The standalone suite is `pilot-qmap-v1-420s`. Its 420-second full-worker budget derives solely from `atlas.WORKER_TIMEOUT_SECONDS` and includes imports, parsing, three compilations/checks, export and startup/shutdown, not 420 seconds per compilation.
+
+The combined suite is `pilot-v0.5-qmap-mixed-budgets`, with these 72 entries and the existing 792 v0.4 records for the other eleven configurations. The name explicitly avoids claiming a common budget. No Qiskit, pytket or BQSKit recipe is remeasured. Qiskit L2 is the reused v0.4 reference. v0.4's original initial 120-second budget and 42 timeout-only retries at 600 seconds remain separate from QMAP's 420-second budget. The combined protocol has no universal worker budget.
 
 Run from an approved source checkout with Python 3.12:
 
@@ -54,11 +56,11 @@ Run from an approved source checkout with Python 3.12:
 uv sync --frozen
 # Optional preparation only: creates a new fixed workspace without measuring.
 uv run --frozen python atlas.py campaign --into /tmp/ta-qmap/campaigns --prepare-only
-# Actual full measurement, only after separate execution approval:
+# Authorized QMAP-only measurement; do not run pytest or another BQSKit job:
 uv run --frozen python atlas.py campaign --into /tmp/ta-qmap/campaigns
 ```
 
-`--into` is a parent directory, not an existing results file. Each invocation reserves a new UTC/UUID leaf with source/assets, frozen inputs, licenses, source commit and byte hashes, dependencies and budget. The actual worker runs the copied `atlas.py` with that workspace as cwd. No input regeneration or old-result reuse occurs. Historical documentation links use a separate byte-identical `history/pilot-v0.4/` namespace and never contribute entries or scores.
+`--into` is a parent directory, not an existing results file. Each invocation reserves a new UTC/UUID leaf with source/assets, frozen inputs, licenses, source commit and byte hashes, dependencies and budget. The actual worker runs the copied `atlas.py` with that workspace as cwd. No input regeneration occurs. A byte-identical `history/pilot-v0.4/` namespace preserves the historical results, attempts, documentation and artifacts. The parent explicitly reuses its records only at combination time. Historical output artifacts are also byte-copied into the new workspace's output namespace so unchanged record links resolve. Their names belong to the other eleven configurations and cannot collide with QMAP artifact names. All inherited bytes are hashed and checked; workers cannot be scheduled for inherited configurations.
 
 A prepared workspace can be measured once with the same venv interpreter:
 
@@ -66,7 +68,7 @@ A prepared workspace can be measured once with the same venv interpreter:
 /path/to/source/.venv/bin/python /path/to/new-workspace/atlas.py run
 ```
 
-`RUN_STARTED` prevents rerun. Resume, retry and overwrite are refused. An interrupted workspace remains incomplete; create a different ID and measure the whole matrix again. Parent-owned JSONL retains completed outcomes. Workers exclusively create their own QASM artifacts. The parent validates identity, budget and artifact hashes, publishes new results without replacement, hashes the measurement snapshot, then creates `MEASUREMENT_COMPLETE` last.
+`RUN_STARTED` prevents rerun. Resume and overwrite are refused; `retry-timeouts` is removed. Historical retries are complete and preserved as data. Selective QMAP retries would change cohort provenance. An interrupted workspace remains incomplete; a replacement requires a different ID and explicit approval to measure all 72 QMAP entries again. Parent-owned JSONL retains completed outcomes. Workers exclusively create their own QASM artifacts. The parent validates identity, budget, unchanged inherited bytes and artifact hashes. It writes the 72 measured entries to `data/qmap-results.json`, joins unchanged historical records into `data/results.json` without replacement, hashes both files and all inherited/new artifacts, then creates `MEASUREMENT_COMPLETE` last. `protocol.measurement_sources` retains both raw-file digests, complete source protocols, environments and timestamps. `protocol.configuration_sources` identifies the source of each configuration. `previous_attempts` and explicit record budgets are never rewritten; retained initial records without a budget use their source's initial 120 seconds.
 
 Build the site only from a completed workspace:
 
@@ -76,4 +78,4 @@ Build the site only from a completed workspace:
 
 The builder verifies the measurement seal, raw/spec/manifest identity and hashes, and same-workspace links before publishing derived HTML and the display-only sidecar. Rebuilding derived files is allowed; changing measurements is not. The raw download, embedded data and sidecar refer to the same campaign. No fake new-suite results are generated for the current historical site.
 
-The old `data/results.json`, `data/attempts`, releases and their 120/600-second provenance remain unchanged. Quality and Speed remain `qcec-adjusted-v1` with the same run's Qiskit L2 reference, nested medians, coverage and pass-rate rules. Mapping-only and stock preset optimization are different recipes, not equal SDK effort.
+The old `data/results.json`, `data/attempts`, releases and their 120/600-second provenance remain unchanged. Quality and Speed remain `qcec-adjusted-v1` with the unchanged v0.4 Qiskit L2 reference, nested medians, coverage, N/A and pass-rate rules. The site prominently labels mixed budgets and measurement windows. Timing and acceptance comparisons are not matched-budget evidence. Mapping-only and stock preset optimization are different recipes, not equal SDK effort.

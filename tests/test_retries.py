@@ -1,6 +1,8 @@
 import json
 import os
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -15,8 +17,13 @@ def test_new_campaign_refuses_retry_without_touching_history(tmp_path, monkeypat
     )
     before = path.read_bytes()
     monkeypatch.setattr(atlas, "ROOT", tmp_path)
-    with pytest.raises(RuntimeError, match="cannot retry"):
-        atlas.retry_timeouts()
+    command = subprocess.run(
+        [sys.executable, str(Path(atlas.__file__)), "retry-timeouts"],
+        capture_output=True,
+        text=True,
+    )
+    assert command.returncode == 2
+    assert "invalid choice" in command.stderr
     assert path.read_bytes() == before
     assert not (tmp_path / "data/attempts").exists()
     with pytest.raises(RuntimeError, match="cannot overwrite"):

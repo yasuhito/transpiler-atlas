@@ -1,32 +1,64 @@
 # Pilot protocol and preserved v0.4 results
 
-## Next campaign: pilot-v0.5-qmap-420s
+## Mixed-source suite: pilot-v0.5-qmap-mixed-budgets
 
-The approved next campaign adds `qmap-sc-heuristic-maponly-v1` and measures all
-12 configurations anew: 12 frozen inputs × 12 configurations × 2 targets ×
-3 seed slots = **864 entries**, each with three repetitions. No v0.5 measurements
-have been published. The currently displayed dataset remains v0.4.
+The approved decision replaces the proposed 864-worker rerun with a **QMAP-only
+campaign of 72 entries**: 12 frozen inputs × 2 targets × 3 seed slots, each with
+three repetitions. Only `qmap-sc-heuristic-maponly-v1` is measured anew, using the
+420-second full-worker budget from `atlas.WORKER_TIMEOUT_SECONDS`.
 
-The shared full-worker budget is **420 seconds**, derived only from
-`atlas.WORKER_TIMEOUT_SECONDS` and recorded in protocol, records, campaign spec
-and snapshot. The seed schedule, input identity, basis, bidirectional targets,
-equal physical/input width, no-ancilla rule, strict QCEC tolerances, scoring and
-Qiskit L2 reference are unchanged. QMAP has no seed API; its slots independently
-repeat the same mapping-only recipe, without reusing outputs.
+The combined suite is named **`pilot-v0.5-qmap-mixed-budgets`** instead of
+`pilot-v0.5-qmap-420s`, because a single 420-second suffix would imply equal
+admission budgets for all configurations. Its 864 records consist of 72 new
+QMAP records plus **792 unchanged v0.4 records** for the existing 11 configurations.
+The standalone measurement suite is `pilot-qmap-v1-420s`.
 
-Use a new create-only workspace, never the historical results path:
+### Provenance and interpretation
+
+v0.4 was measured initially with **120-second workers**. Only the **42 initial
+timeouts** were retried at **600 seconds**; 750 initial completed outcomes were
+retained. This is not a uniformly 600-second campaign. The original protocol is
+retained under `protocol.measurement_sources['v0.4'].protocol`, including
+`initial_worker_timeout_seconds=120`, `worker_timeout_seconds=600`,
+`timeout_retry_entries=42`, and
+`initial_attempt_snapshot=data/attempts/pilot-v0.4-120s.json`.
+
+`protocol.configuration_sources` associates every configuration with its source.
+Every reused record, including `previous_attempts` and any explicit
+`worker_timeout_seconds`, is unchanged. An initial record without a per-record
+budget uses its source's initial 120-second budget, not the retry budget.
+The QMAP source records 420 seconds for each new worker. The combined protocol
+has **no universal worker_timeout_seconds**. Source environments, timestamps,
+raw files and digests remain separate. A visible page note and per-configuration
+labels explain the mixed budgets and different measurement windows.
+
+The Qiskit L2 reference is reused unchanged from v0.4. The scoring equations,
+nested medians, QCEC pass-rate penalty, required slots, missing/reference N/A
+rules, strict checker tolerances, frozen inputs, basis, bidirectional targets,
+equal width and no-added-ancilla rule are unchanged. This authorized reuse does
+not make the comparison a matched-budget experiment. Timing and pass rates can
+be affected by different admission budgets, host load and measurement windows.
+Ranks may change when adding QMAP; the old configurations' scores and raw values
+do not change.
+
+### Run and build
 
 ```sh
 uv sync --frozen
+# Creates a new workspace without measuring:
 uv run --frozen python atlas.py campaign --into /tmp/ta-qmap/campaigns --prepare-only
-# Full measurement requires explicit execution approval:
+# Measures only the 72 QMAP entries, one worker at a time:
 uv run --frozen python atlas.py campaign --into /tmp/ta-qmap/campaigns
 ```
 
-See [QMAP recipe and workspace lifecycle](qmap.md) for exact settings, mapping,
-phase, timing, completed-snapshot site generation and incomplete-run handling.
-Resume, retry and overwrite are refused for this new campaign. Historical
-120/600-second data must not be relabeled as 420-second data or combined with it.
+Do not run pytest or another BQSKit job during the QMAP campaign. See
+[QMAP recipe and workspace lifecycle](qmap.md) for source/artifact ownership,
+standalone versus combined data, budget records, seals and local site generation.
+The repository's historical data is never overwritten. Resume and overwrite
+remain refused. `retry-timeouts` is removed: v0.4's retry has already happened
+and is provenance, not an operation to repeat. A QMAP timeout remains in its
+source cohort; selective retries would change the measurement window. A new
+QMAP cohort would require a new workspace and explicit execution approval.
 
 ## Preserved v0.4 protocol
 

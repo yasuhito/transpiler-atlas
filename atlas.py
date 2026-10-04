@@ -24,7 +24,8 @@ ROOT = Path(__file__).resolve().parent
 BASIS = {"rz", "sx", "x", "cx"}
 SEEDS = [7, 19, 43]
 REPEATS = 3
-SUITE = "pilot-v0.5-qmap-420s"
+SUITE = "pilot-v0.5-qmap-mixed-budgets"
+MEASUREMENT_SUITE = "pilot-qmap-v1-420s"
 COMPILERS = ["qiskit", "pytket", "bqskit", "qmap"]
 SDK_PACKAGES = {"qiskit": "qiskit", "pytket": "pytket", "bqskit": "bqskit", "qmap": "mqt.qmap"}
 BQSKIT_EPSILON = 1e-12
@@ -81,6 +82,8 @@ CONFIGURATIONS = [
     },
 ]
 
+
+MEASURED_CONFIGURATIONS = [c for c in CONFIGURATIONS if c["compiler"] == "qmap"]
 
 # Display-only metadata. Never merge into the execution registry above.
 CONFIGURATION_ANNOTATIONS = {
@@ -582,10 +585,6 @@ def execute_job(
     return result
 
 
-def retry_timeouts() -> None:
-    raise RuntimeError("New campaigns cannot retry or resume; create a fresh workspace")
-
-
 def read_completed_results(log: Path, jobs: list) -> list[dict]:
     results = []
     for line in log.read_text().splitlines():
@@ -625,7 +624,7 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
     jobs = [
         (case, compiler, target, seed)
         for case in cases
-        for compiler in [c["id"] for c in CONFIGURATIONS]
+        for compiler in [c["id"] for c in MEASURED_CONFIGURATIONS]
         for target in ["all-to-all", "line"]
         for seed in SEEDS
     ]
@@ -667,7 +666,7 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
     )
     document = {
         "schema_version": 2,
-        "suite": SUITE,
+        "suite": MEASUREMENT_SUITE,
         "campaign_id": spec["campaign_id"],
         "source_commit": spec["source_commit"],
         "created_at": datetime.now(UTC).isoformat(),
@@ -708,13 +707,13 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
         "protocol": {
             "seeds": SEEDS,
             "timing_repeats": REPEATS,
-            "compilers": COMPILERS,
-            "sdk_packages": SDK_PACKAGES,
+            "compilers": ["qmap"],
+            "sdk_packages": {"qmap": SDK_PACKAGES["qmap"]},
             "qmap_pipeline": configuration_for("qmap-sc-heuristic-maponly-v1")["recipe"],
             "qmap_seed_note": (
                 "No mapper seed API; slots 7/19/43 are independent repetitions, not RNG seeds."
             ),
-            "configurations": CONFIGURATIONS,
+            "configurations": MEASURED_CONFIGURATIONS,
             "reference_configuration": REFERENCE_CONFIGURATION,
             "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
             "resumed_entries": resumed_entries,
@@ -765,7 +764,7 @@ def _terminate(_signum, _frame):
 def main() -> None:
     signal.signal(signal.SIGTERM, _terminate)
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["campaign", "run", "worker", "retry-timeouts"])
+    parser.add_argument("action", choices=["campaign", "run", "worker"])
     parser.add_argument("args", nargs="*")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--resume-log", type=Path)
@@ -789,8 +788,6 @@ def main() -> None:
         print(create(options.into, prepare_only=options.prepare_only))
     elif options.action == "run":
         run_pilot(overwrite=options.overwrite, resume_log=options.resume_log)
-    elif options.action == "retry-timeouts":
-        retry_timeouts()
     else:
         case_id, compiler, target, seed = options.args
         manifest = json.loads((ROOT / "data" / "manifest.json").read_text())

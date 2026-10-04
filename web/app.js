@@ -14,6 +14,22 @@ const esc = value => String(value).replace(/[&<>"']/g, c => ({
 }[c]));
 const sdkNames = { qiskit: 'Qiskit', pytket: 'pytket', bqskit: 'BQSKit', qmap: 'MQT QMAP' };
 const sdkVersion = sdk => data.environment.versions[data.protocol.sdk_packages?.[sdk] ?? sdk];
+function budgetDescription(source) {
+  const p = source.protocol;
+  if (p.timeout_retry_entries) return `Initially ${p.initial_worker_timeout_seconds} s per worker; only ${p.timeout_retry_entries} initial timeouts retried at ${p.worker_timeout_seconds} s. ${source.records - p.timeout_retry_entries} initial outcomes retained. Initial attempt snapshot: ${p.initial_attempt_snapshot}. Per-record previous_attempts and worker_timeout_seconds preserve actual provenance.`;
+  return `${p.worker_timeout_seconds} s per worker, including three compilations, strict checks and startup/shutdown; not per compilation.`;
+}
+function configurationBudget(id) {
+  const source = data.protocol.measurement_sources?.[data.protocol.configuration_sources?.[id]];
+  if (!source) return '';
+  const p = source.protocol;
+  return source.kind === 'reused' ? `Reused ${source.suite}: initial ${p.initial_worker_timeout_seconds} s; timeout-only retries ${p.worker_timeout_seconds} s` : `New QMAP measurement: ${p.worker_timeout_seconds} s`;
+}
+function recordBudget(row) {
+  const source = data.protocol.measurement_sources?.[data.protocol.configuration_sources?.[row.configuration_id]];
+  const p = source?.protocol ?? data.protocol;
+  return row.worker_timeout_seconds ?? p.initial_worker_timeout_seconds ?? p.worker_timeout_seconds;
+}
 const legacyLabels = { qiskit: 'Preset level 2', pytket: 'Peephole + mapping + rebase', bqskit: 'Level 1 · 2Q blocks' };
 const specs = data.protocol.configurations ?? data.protocol.compilers.map(compiler => ({ id: compiler, compiler, label: legacyLabels[compiler] }));
 const compilerIds = specs.map(c => c.id);
@@ -214,7 +230,7 @@ function numberCell(row, key, options = {}) {
   return `<td class="num${selected ? ' selected-metric' : ''}${provisional ? ' unverified-metric' : ''}${penalized ? ' penalized-score' : ''}"${tooltip ? ' title="' + esc(tooltip) + '"' : ''}>${scored ? scoreContent(row, key) : value(row[key], key)}${status}${options.matrix ? approximationTag(row.compiler) : ''}</td>`;
 }
 function nameCell(compiler, detailed) {
-  return `<span class="compiler-name"><i class="dot ${sdkFor(compiler)}"></i>${label(compiler)}</span>${detailed ? '<span class="sub mono">' + esc(sdkVersion(sdkFor(compiler))) + '</span>' : ''}<span class="sub">${esc(configurations[compiler])} ${approximationTag(compiler)}</span>`;
+  return `<span class="compiler-name"><i class="dot ${sdkFor(compiler)}"></i>${label(compiler)}</span>${detailed ? '<span class="sub mono">' + esc(sdkVersion(sdkFor(compiler))) + '</span>' : ''}<span class="sub">${esc(configurations[compiler])} ${approximationTag(compiler)}</span>${configurationBudget(compiler) ? '<span class="sub budget-provenance">' + esc(configurationBudget(compiler)) + '</span>' : ''}`;
 }
 function renderLeaderboard(items, compilers) {
   const rows = compilerRows(items, compilers).sort(compare);
@@ -385,7 +401,10 @@ const trials = data.results.flatMap(r => r.trials ?? []);
 const accepted = trials.filter(t => t.validation.accepted).length;
 $('suite-version').textContent = data.suite.replace('pilot-v', 'Pilot v');
 $('score-version').textContent = 'Scores: ' + scoreVersion;
-$('updated').textContent = 'Measured ' + (data.updated_at ?? data.created_at).slice(0, 10);
+$('updated').textContent = (data.protocol.measurement_sources ? 'Combined ' : 'Measured ') + (data.updated_at ?? data.created_at).slice(0, 10);
+if ($('budget-note')) $('budget-note').textContent = data.protocol.measurement_sources
+  ? `Mixed budgets and measurement windows. QMAP alone newly measured at ${data.protocol.measurement_sources.qmap420.protocol.worker_timeout_seconds} s. Existing 11 configurations reused unchanged from v0.4: ${budgetDescription(data.protocol.measurement_sources['v0.4'])} Qiskit L2 is the reused v0.4 reference. This is not a matched-budget rerun.`
+  : budgetDescription({ protocol: data.protocol, records: data.results.length });
 $('dataset-meta').textContent = `${data.cases.length} circuits · ${sdkIds.length} SDKs · ${compilerIds.length} configurations · 2 topologies · ${accepted}/${trials.length} QCEC checks passed`;
 $('footer-meta').textContent = `${data.suite} · rz / sx / x / cx · ${data.environment.python ? 'Python ' + data.environment.python : ''}`;
 const env = data.environment;
@@ -398,8 +417,13 @@ const fields = [
   ...(data.protocol.qmap_pipeline ? [['MQT QMAP', JSON.stringify(data.protocol.qmap_pipeline)], ['QMAP seed', data.protocol.qmap_seed_note], ['QMAP timer', 'Includes required MQT-to-Qiskit conversion and native basis lowering; no Qiskit optimization or routing.']] : []),
   ['Targets', 'Atlas-designed synthetic targets, not a named device or a corpus requirement. Input-width line or all-to-all; bidirectional CX; no added workspace.'],
   ['Score version', scoreVersion + ': performance × QCEC pass rate; a pass-rate penalty is not a measured physical error.'],
-  ['Worker budget', `${data.protocol.worker_timeout_seconds} s per circuit/configuration/target/seed worker, including three compilations, checks, and startup/shutdown; not a per-compilation timeout.`],
-  ...(data.protocol.timeout_retry_entries ? [['Retries', `${data.protocol.timeout_retry_entries} initial ${data.protocol.initial_worker_timeout_seconds} s timeouts retried at ${data.protocol.worker_timeout_seconds} s; ${data.results.length - data.protocol.timeout_retry_entries} completed outcomes retained. Initial results and previous attempts remain in raw data.`]] : []),
+  ...(data.protocol.measurement_sources
+    ? Object.entries(data.protocol.measurement_sources).flatMap(([id, source]) => [
+      ['Budget source: ' + id, budgetDescription(source)],
+      ['Measurement source: ' + id, `${source.kind}; ${source.records} records; measured ${source.created_at}; ${source.results_path}; SHA-256 ${source.results_sha256}`],
+      ['Source environment: ' + id, JSON.stringify(source.environment)],
+    ])
+    : [['Worker budget', budgetDescription({ protocol: data.protocol, records: data.results.length })]]),
   ['Validation', data.protocol.validation],
   ...specs.filter(c => c.numerical_approximation).map(c => ['Configuration note: ' + c.id, c.approximation_note]),
 ];

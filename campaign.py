@@ -1,4 +1,4 @@
-"""Create-only, self-contained campaign workspaces. Never reuse historical records."""
+"""Measure only QMAP, then compose immutable v0.4 records with explicit provenance."""
 
 import hashlib
 import importlib
@@ -17,6 +17,7 @@ SOURCE_FILES = (
     "atlas.py",
     "qmap_adapter.py",
     "campaign.py",
+    "mixed_sources.py",
     "build_site.py",
     "pyproject.toml",
     "uv.lock",
@@ -78,7 +79,7 @@ def input_cases(root):
 
 
 def preflight():
-    for name in ("qiskit", "pytket", "bqskit", "mqt.qcec", "mqt.qmap"):
+    for name in ("qiskit", "mqt.qcec", "mqt.qmap"):
         importlib.import_module(name)
     if importlib.metadata.version("mqt.qmap") != "3.10.0":
         raise ValueError("This recipe requires QMAP 3.10.0")
@@ -126,6 +127,14 @@ def create(into, *, prepare_only=False):
             new = history / file.relative_to(source / "data")
             new.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(old, new)
+            if file.is_relative_to(source / "data/outputs"):
+                artifact = root / file.relative_to(source)
+                artifact.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(old, artifact)
+    from mixed_sources import load_legacy
+
+    if load_legacy(root)["cases"] != cases:
+        raise ValueError("Legacy frozen inputs do not match campaign")
     for name in ("pilot.md", "bqskit.md"):
         path = root / "docs" / name
         path.write_text(path.read_text().replace("(../data/", "(../history/pilot-v0.4/data/"))
@@ -140,8 +149,11 @@ def create(into, *, prepare_only=False):
     spec = {
         "campaign_id": identifier,
         "suite": atlas.SUITE,
+        "measurement_suite": atlas.MEASUREMENT_SUITE,
         "worker_timeout_seconds": atlas.WORKER_TIMEOUT_SECONDS,
         "configurations": atlas.CONFIGURATIONS,
+        "measurement_configurations": atlas.MEASURED_CONFIGURATIONS,
+        "measured_entries": len(cases) * len(atlas.MEASURED_CONFIGURATIONS) * 2 * len(atlas.SEEDS),
         "seeds": atlas.SEEDS,
         "timing_repeats": atlas.REPEATS,
         "cases": cases,
@@ -176,6 +188,8 @@ def validate_workspace(root):
     spec = json.loads(relative_file(root, "campaign.json").read_text())
     if (
         spec["suite"] != atlas.SUITE
+        or spec["measurement_suite"] != atlas.MEASUREMENT_SUITE
+        or spec["measurement_configurations"] != atlas.MEASURED_CONFIGURATIONS
         or spec["worker_timeout_seconds"] != atlas.WORKER_TIMEOUT_SECONDS
         or spec["configurations"] != atlas.CONFIGURATIONS
         or spec["seeds"] != atlas.SEEDS
@@ -184,7 +198,10 @@ def validate_workspace(root):
     ):
         raise ValueError("Campaign settings do not match execution source")
     for name, expected in spec["files"].items():
-        if not name.startswith("history/") and digest(relative_file(root, name)) != expected:
+        if (
+            not name.startswith(("history/", "data/outputs/"))
+            and digest(relative_file(root, name)) != expected
+        ):
             raise ValueError(f"Campaign source/input hash mismatch: {name}")
     if spec["cases"] != input_cases(root):
         raise ValueError("Campaign input manifest changed")
@@ -202,7 +219,7 @@ def validate_worker(root, case, configuration, target, seed):
         raise ValueError("Campaign is not accepting workers")
     if (
         case not in spec["cases"]
-        or configuration not in {c["id"] for c in atlas.CONFIGURATIONS}
+        or configuration not in {c["id"] for c in atlas.MEASURED_CONFIGURATIONS}
         or target not in {"line", "all-to-all"}
         or seed not in atlas.SEEDS
     ):
@@ -261,7 +278,7 @@ def finish(root, document):
     expected = {
         (case["id"], config["id"], target, seed)
         for case in spec["cases"]
-        for config in atlas.CONFIGURATIONS
+        for config in atlas.MEASURED_CONFIGURATIONS
         for target in ("line", "all-to-all")
         for seed in atlas.SEEDS
     }
@@ -273,9 +290,9 @@ def finish(root, document):
     if (
         document["protocol"]["worker_timeout_seconds"] != spec["worker_timeout_seconds"]
         or document["campaign_id"] != spec["campaign_id"]
-        or document["suite"] != spec["suite"]
+        or document["suite"] != spec["measurement_suite"]
         or document["cases"] != spec["cases"]
-        or document["protocol"]["configurations"] != spec["configurations"]
+        or document["protocol"]["configurations"] != spec["measurement_configurations"]
         or document["protocol"]["seeds"] != spec["seeds"]
         or document["protocol"]["timing_repeats"] != spec["timing_repeats"]
     ):
@@ -285,9 +302,17 @@ def finish(root, document):
         validate_record(
             root, row, cases[row["case_id"]], row["configuration_id"], row["target"], row["seed"]
         )
+    for name, expected_hash in spec["files"].items():
+        if digest(relative_file(root, name)) != expected_hash:
+            raise ValueError(f"Inherited/source bytes changed: {name}")
+    from mixed_sources import combine, validate_combined
+
+    exclusive_json(root / "data/qmap-results.json", document)
+    combined = combine(root, document)
+    validate_combined(root, combined)
     # A hard link publishes a complete temp file without replacing an existing snapshot.
     temporary = root / "data/results.pending"
-    exclusive_json(temporary, document)
+    exclusive_json(temporary, combined)
     os.link(temporary, root / "data/results.json")
     temporary.unlink()
     files = {
@@ -295,6 +320,7 @@ def finish(root, document):
         "campaign.json": digest(root / "campaign.json"),
         "RUN_STARTED": digest(root / "RUN_STARTED"),
         "data/results.json": digest(root / "data/results.json"),
+        "data/qmap-results.json": digest(root / "data/qmap-results.json"),
         "data/run.jsonl": digest(root / "data/run.jsonl"),
     }
     for row in document["results"]:
@@ -303,7 +329,10 @@ def finish(root, document):
     snapshot = {
         "campaign_id": spec["campaign_id"],
         "suite": atlas.SUITE,
-        "worker_timeout_seconds": atlas.WORKER_TIMEOUT_SECONDS,
+        "measurement_suite": atlas.MEASUREMENT_SUITE,
+        "measured_entries": len(document["results"]),
+        "reused_entries": combined["protocol"]["reused_entries"],
+        "qmap_worker_timeout_seconds": atlas.WORKER_TIMEOUT_SECONDS,
         "files": files,
     }
     exclusive_json(root / "snapshot-manifest.json", snapshot)
@@ -320,14 +349,19 @@ def validate_completed(root):
     for name, expected in snapshot["files"].items():
         if digest(relative_file(root, name)) != expected:
             raise ValueError(f"Snapshot hash mismatch: {name}")
+    from mixed_sources import validate_combined
+
     raw = json.loads((root / "data/results.json").read_text())
+    qmap = validate_combined(root, raw)
     spec = json.loads((root / "campaign.json").read_text())
     if not (
         raw["campaign_id"] == snapshot["campaign_id"] == spec["campaign_id"]
         and raw["suite"] == snapshot["suite"] == spec["suite"]
-        and raw["protocol"]["worker_timeout_seconds"]
-        == snapshot["worker_timeout_seconds"]
+        and qmap["protocol"]["worker_timeout_seconds"]
+        == snapshot["qmap_worker_timeout_seconds"]
         == spec["worker_timeout_seconds"]
+        and qmap["suite"] == snapshot["measurement_suite"] == spec["measurement_suite"]
+        and len(qmap["results"]) == snapshot["measured_entries"] == spec["measured_entries"]
     ):
         raise ValueError("Snapshot provenance mismatch")
     return snapshot
