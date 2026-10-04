@@ -18,16 +18,23 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from cirq_adapter import recipe_metadata as cirq_recipe_metadata
 from qmap_adapter import recipe_metadata
 
 ROOT = Path(__file__).resolve().parent
 BASIS = {"rz", "sx", "x", "cx"}
 SEEDS = [7, 19, 43]
 REPEATS = 3
-SUITE = "pilot-v0.5-qmap-mixed-budgets"
-MEASUREMENT_SUITE = "pilot-qmap-v1-420s"
-COMPILERS = ["qiskit", "pytket", "bqskit", "qmap"]
-SDK_PACKAGES = {"qiskit": "qiskit", "pytket": "pytket", "bqskit": "bqskit", "qmap": "mqt.qmap"}
+SUITE = "pilot-v0.6-cirq-mixed-budgets"
+MEASUREMENT_SUITE = "pilot-cirq-routecqc-v1-420s"
+COMPILERS = ["qiskit", "pytket", "bqskit", "qmap", "cirq"]
+SDK_PACKAGES = {
+    "qiskit": "qiskit",
+    "pytket": "pytket",
+    "bqskit": "bqskit",
+    "qmap": "mqt.qmap",
+    "cirq": "cirq-core",
+}
 BQSKIT_EPSILON = 1e-12
 WORKER_TIMEOUT_SECONDS = 420
 REFERENCE_CONFIGURATION = "qiskit-l2"
@@ -83,7 +90,16 @@ CONFIGURATIONS = [
 ]
 
 
-MEASURED_CONFIGURATIONS = [c for c in CONFIGURATIONS if c["compiler"] == "qmap"]
+CONFIGURATIONS.append(
+    {
+        "id": "cirq-routecqc-maponly-v1",
+        "compiler": "cirq",
+        "label": "RouteCQC mapping + native lowering",
+        "seed_supported": False,
+        "recipe": cirq_recipe_metadata(),
+    }
+)
+MEASURED_CONFIGURATIONS = [c for c in CONFIGURATIONS if c["id"] == "cirq-routecqc-maponly-v1"]
 
 # Display-only metadata. Never merge into the execution registry above.
 CONFIGURATION_ANNOTATIONS = {
@@ -322,7 +338,7 @@ def generate_inputs() -> list[dict]:
     return cases
 
 
-def compile_once(original, compiler: str, target: str, seed: int):
+def compile_once(original, compiler: str, target: str, seed: int, *, frozen_qasm=None):
     from qiskit import qasm2
 
     configuration = configuration_for(compiler)
@@ -435,6 +451,22 @@ def compile_once(original, compiler: str, target: str, seed: int):
         from qmap_adapter import NativeTarget, compile_native
 
         return compile_native(original, NativeTarget(n, tuple(edges), tuple(sorted(BASIS))))
+    elif compiler == "cirq":
+        from cirq_adapter import compile_native
+        from qmap_adapter import NativeTarget
+
+        if original.num_clbits or original.ancillas:
+            raise ValueError("Classical or ancilla input")
+        # Programmatic circuit API uses QASM plus a separate scalar. The worker
+        # always supplies the original frozen bytes, never a Qiskit re-export.
+        data = frozen_qasm if frozen_qasm is not None else qasm2.dumps(original).encode()
+        order = tuple((r.name, i) for r in original.qregs for i in range(r.size))
+        return compile_native(
+            data,
+            order,
+            NativeTarget(n, tuple(edges), tuple(sorted(BASIS))),
+            input_phase=float(original.global_phase),
+        )
     else:
         raise ValueError(compiler)
     return native, elapsed, initial, final
@@ -454,11 +486,16 @@ def worker(
     if artifact_root is None and not output_dir.resolve().is_relative_to(ROOT.resolve()):
         raise ValueError("Escaping artifact directory")
     output_dir.mkdir(parents=True, exist_ok=True)
-    original = qasm2.load(ROOT / case["path"])
+    frozen = (ROOT / case["path"]).read_bytes()
+    if hashlib.sha256(frozen).hexdigest() != case["sha256"]:
+        raise ValueError("Frozen input hash mismatch")
+    original = qasm2.loads(frozen.decode())
     timings = []
     trials = []
     for _ in range(REPEATS):
-        native, elapsed, initial, final = compile_once(original, compiler, target, seed)
+        native, elapsed, initial, final = compile_once(
+            original, compiler, target, seed, frozen_qasm=frozen
+        )
         timings.append(elapsed)
         trials.append(
             {
@@ -560,7 +597,7 @@ def execute_job(
                 "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
             }
             if not isinstance(result, dict) or any(
-                key in result and result[key] != value for key, value in expected.items()
+                key not in result or result[key] != value for key, value in expected.items()
             ):
                 raise RuntimeError("Worker identity or budget mismatch")
     except subprocess.TimeoutExpired:
@@ -707,10 +744,12 @@ def run_pilot(*, overwrite: bool = False, resume_log: Path | None = None) -> Non
         "protocol": {
             "seeds": SEEDS,
             "timing_repeats": REPEATS,
-            "compilers": ["qmap"],
-            "sdk_packages": {"qmap": SDK_PACKAGES["qmap"]},
-            "qmap_pipeline": configuration_for("qmap-sc-heuristic-maponly-v1")["recipe"],
-            "qmap_seed_note": (
+            "compilers": [c["compiler"] for c in MEASURED_CONFIGURATIONS],
+            "sdk_packages": {
+                c["compiler"]: SDK_PACKAGES[c["compiler"]] for c in MEASURED_CONFIGURATIONS
+            },
+            "cirq_pipeline": configuration_for("cirq-routecqc-maponly-v1")["recipe"],
+            "cirq_seed_note": (
                 "No mapper seed API; slots 7/19/43 are independent repetitions, not RNG seeds."
             ),
             "configurations": MEASURED_CONFIGURATIONS,
@@ -805,7 +844,21 @@ def main() -> None:
         try:
             result = worker(case, compiler, target, int(seed), artifact_root=options.artifact_root)
         except CompilationError as error:
-            result = {"status": "error", "error_kind": error.reason, "error": str(error)}
+            config = configuration_for(compiler)
+            result = {
+                "status": "error",
+                "error_kind": error.reason,
+                "error": str(error),
+                "case_id": case_id,
+                "family": case["family"],
+                "qubits": case["qubits"],
+                "compiler": config["compiler"],
+                "configuration_id": config["id"],
+                "seed_supported": config["seed_supported"],
+                "target": target,
+                "seed": int(seed),
+                "worker_timeout_seconds": WORKER_TIMEOUT_SECONDS,
+            }
         print(json.dumps(result))
 
 

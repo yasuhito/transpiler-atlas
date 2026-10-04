@@ -1,4 +1,4 @@
-"""Measure only QMAP, then compose immutable v0.4 records with explicit provenance."""
+"""Measure a Cirq cohort and reuse authenticated v0.4 and QMAP v1 bytes."""
 
 import hashlib
 import importlib
@@ -16,6 +16,8 @@ from uuid import uuid4
 SOURCE_FILES = (
     "atlas.py",
     "qmap_adapter.py",
+    "cirq_adapter.py",
+    "publication.py",
     "campaign.py",
     "mixed_sources.py",
     "build_site.py",
@@ -79,10 +81,12 @@ def input_cases(root):
 
 
 def preflight():
-    for name in ("qiskit", "mqt.qcec", "mqt.qmap"):
+    for name in ("qiskit", "mqt.qcec", "mqt.qmap", "cirq"):
         importlib.import_module(name)
     if importlib.metadata.version("mqt.qmap") != "3.10.0":
         raise ValueError("This recipe requires QMAP 3.10.0")
+    if importlib.metadata.version("cirq-core") != "1.7.0":
+        raise ValueError("This recipe requires Cirq 1.7.0")
     return {d.metadata["Name"]: d.version for d in importlib.metadata.distributions()}
 
 
@@ -119,29 +123,30 @@ def create(into, *, prepare_only=False):
     shutil.copyfile(source / "data/manifest.json", root / "data/manifest.json")
     for case in cases:
         shutil.copyfile(source / case["path"], root / case["path"])
-    # Historical documentation remains truthful without linking old text to new measurements.
-    history = root / "history/pilot-v0.4/data"
-    legacy = json.loads((source / "data/results.json").read_text())
-    legacy_artifacts = {t["artifact"] for r in legacy["results"] for t in r.get("trials", [])}
-    for file in sorted((source / "data").rglob("*")):
-        name = str(file.relative_to(source))
-        if name.startswith("data/campaigns/") or (
-            name.startswith("data/outputs/") and name not in legacy_artifacts
-        ):
-            continue
-        if file.is_file():
-            old = relative_file(source, str(file.relative_to(source)))
-            new = history / file.relative_to(source / "data")
+    from publication import load
+
+    inherited, _ = load(source)
+    if inherited["cases"] != cases or len(inherited["results"]) != 864:
+        raise ValueError("Published frozen inputs or cohort changed")
+    selector = json.loads(relative_file(source, "publication.json").read_text())
+    mapping = json.loads(relative_file(source, selector["file_map"]).read_text())
+    for name, physical in mapping.items():
+        old = relative_file(source, physical)
+        destinations = [root / "history/pilot-v0.5" / name]
+        # Byte-identical aliases retain old report links, not executable imports.
+        if name.startswith("history/pilot-v0.4/"):
+            destinations.append(root / name)
+        if name.startswith("history/pilot-v0.4/data/attempts/"):
+            destinations.append(root / name.removeprefix("history/pilot-v0.4/"))
+        for new in destinations:
             new.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(old, new)
-            if file.is_relative_to(source / "data/outputs"):
-                artifact = root / file.relative_to(source)
-                artifact.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(old, artifact)
-    from mixed_sources import load_legacy
-
-    if load_legacy(root)["cases"] != cases:
-        raise ValueError("Legacy frozen inputs do not match campaign")
+    for row in inherited["results"]:
+        for trial in row.get("trials", []):
+            old = relative_file(source, trial["artifact"])
+            new = root / trial["artifact"]
+            new.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(old, new)
     for name in ("pilot.md", "bqskit.md"):
         path = root / "docs" / name
         path.write_text(path.read_text().replace("(../data/", "(../history/pilot-v0.4/data/"))
@@ -154,6 +159,8 @@ def create(into, *, prepare_only=False):
         ["git", "--no-optional-locks", "-C", str(source), "rev-parse", "HEAD"], text=True
     ).strip()
     spec = {
+        "spec_format_version": 2,
+        "inherited_seal_sha256": digest(root / "history/pilot-v0.5/MEASUREMENT_COMPLETE"),
         "campaign_id": identifier,
         "suite": atlas.SUITE,
         "measurement_suite": atlas.MEASUREMENT_SUITE,
@@ -194,7 +201,8 @@ def validate_workspace(root):
     root = Path(root).resolve()
     spec = json.loads(relative_file(root, "campaign.json").read_text())
     if (
-        spec["suite"] != atlas.SUITE
+        spec.get("spec_format_version") != 2
+        or spec["suite"] != atlas.SUITE
         or spec["measurement_suite"] != atlas.MEASUREMENT_SUITE
         or spec["measurement_configurations"] != atlas.MEASURED_CONFIGURATIONS
         or spec["worker_timeout_seconds"] != atlas.WORKER_TIMEOUT_SECONDS
@@ -264,6 +272,12 @@ def validate_record(root, row, case, configuration, target, seed):
         raise ValueError("Worker acceptance status mismatch")
     for repeat, trial in enumerate(row["trials"]):
         validation = trial["validation"]
+        if (
+            sorted(trial["initial_map"]) != list(range(case["qubits"]))
+            or sorted(trial["final_map"]) != list(range(case["qubits"]))
+            or not isinstance(trial["global_phase"], (int, float))
+        ):
+            raise ValueError("Worker map or phase mismatch")
         if validation["accepted"] != (
             validation["criterion"] in {"equivalent", "equivalent_up_to_global_phase"}
         ):
@@ -314,7 +328,8 @@ def finish(root, document):
             raise ValueError(f"Inherited/source bytes changed: {name}")
     from mixed_sources import combine, validate_combined
 
-    exclusive_json(root / "data/qmap-results.json", document)
+    standalone = "data/cirq-results.json"
+    exclusive_json(root / standalone, document)
     combined = combine(root, document)
     validate_combined(root, combined)
     # A hard link publishes a complete temp file without replacing an existing snapshot.
@@ -327,19 +342,21 @@ def finish(root, document):
         "campaign.json": digest(root / "campaign.json"),
         "RUN_STARTED": digest(root / "RUN_STARTED"),
         "data/results.json": digest(root / "data/results.json"),
-        "data/qmap-results.json": digest(root / "data/qmap-results.json"),
+        standalone: digest(root / standalone),
         "data/run.jsonl": digest(root / "data/run.jsonl"),
     }
     for row in document["results"]:
         for trial in row.get("trials", []):
             files[trial["artifact"]] = trial["artifact_sha256"]
     snapshot = {
+        "seal_format_version": 2,
+        "kind": "cirq-mixed",
         "campaign_id": spec["campaign_id"],
         "suite": atlas.SUITE,
         "measurement_suite": atlas.MEASUREMENT_SUITE,
         "measured_entries": len(document["results"]),
         "reused_entries": combined["protocol"]["reused_entries"],
-        "qmap_worker_timeout_seconds": atlas.WORKER_TIMEOUT_SECONDS,
+        "worker_timeout_seconds": atlas.WORKER_TIMEOUT_SECONDS,
         "files": files,
     }
     exclusive_json(root / "snapshot-manifest.json", snapshot)
@@ -354,6 +371,9 @@ def validate_completed(root, resolve=None):
     if marker != digest(resolve("snapshot-manifest.json")):
         raise ValueError("Measurement seal mismatch")
     snapshot = json.loads(resolve("snapshot-manifest.json").read_text())
+    version = snapshot.get("seal_format_version", 1)
+    if version not in {1, 2} or (version == 2 and snapshot.get("kind") != "cirq-mixed"):
+        raise ValueError("Unknown seal format")
     for name, expected in snapshot["files"].items():
         if digest(resolve(name)) != expected:
             raise ValueError(f"Snapshot hash mismatch: {name}")
@@ -362,11 +382,14 @@ def validate_completed(root, resolve=None):
     raw = json.loads(resolve("data/results.json").read_text())
     qmap = validate_combined(root, raw, resolve)
     spec = json.loads(resolve("campaign.json").read_text())
+    if spec.get("spec_format_version", 1) != version:
+        raise ValueError("Spec/seal format mismatch")
+    budget_key = "worker_timeout_seconds" if version == 2 else "qmap_worker_timeout_seconds"
     if not (
         raw["campaign_id"] == snapshot["campaign_id"] == spec["campaign_id"]
         and raw["suite"] == snapshot["suite"] == spec["suite"]
         and qmap["protocol"]["worker_timeout_seconds"]
-        == snapshot["qmap_worker_timeout_seconds"]
+        == snapshot[budget_key]
         == spec["worker_timeout_seconds"]
         and qmap["suite"] == snapshot["measurement_suite"] == spec["measurement_suite"]
         and len(qmap["results"]) == snapshot["measured_entries"] == spec["measured_entries"]

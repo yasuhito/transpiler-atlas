@@ -30,7 +30,8 @@ def test_budget_provenance_not_a_uniform_retry_budget(sealed):
     assert p["initial_attempt_snapshot"] == "data/attempts/pilot-v0.4-120s.json"
     assert (root / "history/pilot-v0.4" / p["initial_attempt_snapshot"]).is_file()
     assert data["protocol"]["reference_configuration"] == "qiskit-l2"
-    assert len(data["results"]) == 864
+    assert len(data["results"]) == 936
+    assert set(data["protocol"]["measurement_sources"]) == {"v0.4", "qmap420", "cirq420"}
 
 
 def test_reused_records_are_exact_and_artifacts_resolve(sealed):
@@ -58,4 +59,6 @@ def test_worker_rejects_unmeasured_legacy_configuration(sealed):
     case = campaign.input_cases(fresh)[0]
     with pytest.raises(ValueError, match="schedule"):
         campaign.validate_worker(fresh, case, "bqskit-l3", "line", 19)
-    campaign.validate_worker(fresh, case, "qmap-sc-heuristic-maponly-v1", "line", 19)
+    with pytest.raises(ValueError, match="schedule"):
+        campaign.validate_worker(fresh, case, "qmap-sc-heuristic-maponly-v1", "line", 19)
+    campaign.validate_worker(fresh, case, "cirq-routecqc-maponly-v1", "line", 19)

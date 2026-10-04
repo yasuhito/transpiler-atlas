@@ -60,8 +60,8 @@ def test_job_timeout_uses_shared_budget_and_kills_process_group(monkeypatch):
         assert result["status"] == "timeout"
         assert result["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS == 420
         assert result["error"] == f"{atlas.WORKER_TIMEOUT_SECONDS} s worker budget exceeded"
-    assert waits == [atlas.WORKER_TIMEOUT_SECONDS, None] * 12
-    assert killed == [123] * 12
+    assert waits == [atlas.WORKER_TIMEOUT_SECONDS, None] * len(atlas.CONFIGURATIONS)
+    assert killed == [123] * len(atlas.CONFIGURATIONS)
 
 
 def test_interrupted_job_kills_and_reaps_group(monkeypatch):

@@ -10,7 +10,9 @@ def test_published_campaign_is_sealed_and_legacy_is_unchanged():
     data, raw_path = publication.load(atlas.ROOT)
     legacy = json.loads((atlas.ROOT / "data/results.json").read_text())
     assert legacy["suite"] == "pilot-v0.4"
-    assert data["suite"] == atlas.SUITE
+    assert data["suite"] == "pilot-v0.5-qmap-mixed-budgets"
+    assert len(atlas.CONFIGURATIONS) == 13
+    assert len(data["protocol"]["configurations"]) == 12
     assert len(data["results"]) == 864
     assert data["results"][:792] == legacy["results"]
     assert raw_path.startswith("data/campaigns/")

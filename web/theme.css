@@ -22,6 +22,7 @@
   --pytket: #b96a38;
   --bqskit: #8b54b5;
   --qmap: #147f76;
+  --cirq: #ae4b8a;
   --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 :root[data-theme='dark'] {
@@ -48,6 +49,7 @@
   --pytket: #efa770;
   --bqskit: #ca9eec;
   --qmap: #68d5c6;
+  --cirq: #f19bcd;
 }
 .theme-control { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .theme-control select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 5px 7px; }

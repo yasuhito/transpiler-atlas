@@ -19,7 +19,7 @@ try {
   assert.equal(await page.locator('#result-rows tr').count(), 12);
   assert.equal(await page.getByRole('link', { name: 'Raw JSON', exact: true }).getAttribute('href'), mapping['data/results.json']);
   assert.equal(await page.getByRole('link', { name: 'v0.4 Raw JSON (reused source)', exact: true }).getAttribute('href'), 'data/results.json');
-  assert.match(await page.locator('#budget-note').innerText(), /QMAP alone newly measured at 420 s/);
+  assert.match(await page.locator('#budget-note').innerText(), /New pilot-qmap-v1-420s: 420 s per worker/);
   assert.match(await page.locator('#budget-note').innerText(), /This is not a matched-budget rerun/);
   assert.match(await page.locator('[data-compiler="qiskit-l2"] .budget-provenance').innerText(), /initial 120 s; timeout-only retries 600 s/);
   assert.match(await page.locator('[data-compiler="qmap-sc-heuristic-maponly-v1"] .budget-provenance').innerText(), /420 s/);

@@ -9,6 +9,8 @@ dependencies = [
   "pytket-qiskit>=0.70,<1",
   "mqt.qcec>=3,<4",
   "mqt.qmap==3.10.0",
+  "cirq-core==1.7.0",
+  "ply==3.11",
   "markdown>=3.7,<4",
   "bqskit>=1.2,<2",
 ]

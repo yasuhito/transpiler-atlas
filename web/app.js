@@ -12,8 +12,11 @@ const geometricMean = values => Math.exp(values.reduce((a, b) => a + Math.log(b)
 const esc = value => String(value).replace(/[&<>"']/g, c => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[c]));
-const sdkNames = { qiskit: 'Qiskit', pytket: 'pytket', bqskit: 'BQSKit', qmap: 'MQT QMAP' };
-const sdkVersion = sdk => data.environment.versions[data.protocol.sdk_packages?.[sdk] ?? sdk];
+const sdkNames = { qiskit: 'Qiskit', pytket: 'pytket', bqskit: 'BQSKit', qmap: 'MQT QMAP', cirq: 'Cirq' };
+const sdkVersion = sdk => {
+  const pkg = data.protocol.sdk_packages?.[sdk] ?? sdk;
+  return data.environment.versions[pkg] ?? [...new Set(Object.values(data.protocol.measurement_sources ?? {}).map(s => s.environment.versions[pkg]).filter(Boolean))].join(' / ');
+};
 function budgetDescription(source) {
   const p = source.protocol;
   if (p.timeout_retry_entries) return `Initially ${p.initial_worker_timeout_seconds} s per worker; only ${p.timeout_retry_entries} initial timeouts retried at ${p.worker_timeout_seconds} s. ${source.records - p.timeout_retry_entries} initial outcomes retained. Initial attempt snapshot: ${p.initial_attempt_snapshot}. Per-record previous_attempts and worker_timeout_seconds preserve actual provenance.`;
@@ -23,7 +26,8 @@ function configurationBudget(id) {
   const source = data.protocol.measurement_sources?.[data.protocol.configuration_sources?.[id]];
   if (!source) return '';
   const p = source.protocol;
-  return source.kind === 'reused' ? `Reused ${source.suite}: initial ${p.initial_worker_timeout_seconds} s; timeout-only retries ${p.worker_timeout_seconds} s` : `New QMAP measurement: ${p.worker_timeout_seconds} s`;
+  if (p.initial_worker_timeout_seconds) return `Reused ${source.suite}: initial ${p.initial_worker_timeout_seconds} s; timeout-only retries ${p.worker_timeout_seconds} s`;
+  return `${source.kind === 'reused' ? 'Reused ' + source.suite : 'New ' + (specFor(id).compiler === 'qmap' ? 'QMAP' : label(id)) + ' measurement'}: ${p.worker_timeout_seconds} s`;
 }
 function recordBudget(row) {
   const source = data.protocol.measurement_sources?.[data.protocol.configuration_sources?.[row.configuration_id]];
@@ -403,7 +407,7 @@ $('suite-version').textContent = data.suite.replace('pilot-v', 'Pilot v');
 $('score-version').textContent = 'Scores: ' + scoreVersion;
 $('updated').textContent = (data.protocol.measurement_sources ? 'Combined ' : 'Measured ') + (data.updated_at ?? data.created_at).slice(0, 10);
 if ($('budget-note')) $('budget-note').textContent = data.protocol.measurement_sources
-  ? `Mixed budgets and measurement windows. QMAP alone newly measured at ${data.protocol.measurement_sources.qmap420.protocol.worker_timeout_seconds} s. Existing 11 configurations reused unchanged from v0.4: ${budgetDescription(data.protocol.measurement_sources['v0.4'])} Qiskit L2 is the reused v0.4 reference. This is not a matched-budget rerun.`
+  ? `Mixed budgets and measurement windows. ${Object.values(data.protocol.measurement_sources).map(source => `${source.kind === 'new' ? 'New' : 'Reused'} ${source.suite}: ${budgetDescription(source)}`).join(' ')} Qiskit L2 is the reused v0.4 reference. This is not a matched-budget rerun.`
   : budgetDescription({ protocol: data.protocol, records: data.results.length });
 $('dataset-meta').textContent = `${data.cases.length} circuits · ${sdkIds.length} SDKs · ${compilerIds.length} configurations · 2 topologies · ${accepted}/${trials.length} QCEC checks passed`;
 $('footer-meta').textContent = `${data.suite} · rz / sx / x / cx · ${data.environment.python ? 'Python ' + data.environment.python : ''}`;
@@ -415,6 +419,7 @@ const fields = [
   ['Qiskit', data.protocol.qiskit_pipeline], ['pytket', Array.isArray(data.protocol.pytket_pipeline) ? data.protocol.pytket_pipeline.join(' → ') : JSON.stringify(data.protocol.pytket_pipeline)],
   ...(data.protocol.bqskit_pipeline ? [['BQSKit', JSON.stringify(data.protocol.bqskit_pipeline)]] : []),
   ...(data.protocol.qmap_pipeline ? [['MQT QMAP', JSON.stringify(data.protocol.qmap_pipeline)], ['QMAP seed', data.protocol.qmap_seed_note], ['QMAP timer', 'Includes required MQT-to-Qiskit conversion and native basis lowering; no Qiskit optimization or routing.']] : []),
+  ...(data.protocol.cirq_pipeline ? [['Cirq', JSON.stringify(data.protocol.cirq_pipeline)], ['Cirq seed', data.protocol.cirq_seed_note], ['Cirq timer', 'Includes routing, QASM bridge and native basis lowering; no numerical target optimizer.']] : []),
   ['Targets', 'Atlas-designed synthetic targets, not a named device or a corpus requirement. Input-width line or all-to-all; bidirectional CX; no added workspace.'],
   ['Score version', scoreVersion + ': performance × QCEC pass rate; a pass-rate penalty is not a measured physical error.'],
   ...(data.protocol.measurement_sources

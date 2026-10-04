@@ -20,7 +20,7 @@ try {
   const [before, after] = pages;
   const definitions = await before.evaluate(() => ({ ids: compilerIds, families: enums.family, widths: enums.width }));
   evidence.oldConfigurations = definitions.ids;
-  assert.equal(definitions.ids.length, 11);
+  assert.equal(definitions.ids.length, 12);
   for (const target of ['line', 'all-to-all']) {
     for (const family of definitions.families) for (const width of definitions.widths) {
       const selection = { target, family, width, ids: definitions.ids };
@@ -47,12 +47,12 @@ try {
     evidence.comparisons.push({ target, summaries });
     evidence.qmap.push({ target, ...summaries.find(r => r.compiler === 'qmap-sc-heuristic-maponly-v1') });
   }
-  assert.equal(await after.locator('#result-rows tr').count(), 12);
+  assert.equal(await after.locator('#result-rows tr').count(), 13);
   const raw = siteData(root);
   const oldRaw = siteData(baseline);
-  assert.deepEqual(raw.results.slice(0, 792), oldRaw.results);
+  assert.deepEqual(raw.results.slice(0, oldRaw.results.length), oldRaw.results);
   evidence.passed = true;
-  evidence.scope = 'Actual browser app.js aggregate, scoreCases, compilerRows, value and compare across every nonempty target/family/width selection; old-only ranks, all raw records exact. Absolute ranks with QMAP may change.';
+  evidence.scope = 'Actual browser app.js aggregate, scoreCases, compilerRows, value and compare across every nonempty target/family/width selection; old-only ranks, all raw records exact. Absolute ranks with Cirq may change.';
   if (process.env.EQUIVALENCE_OUTPUT) fs.writeFileSync(process.env.EQUIVALENCE_OUTPUT, JSON.stringify(evidence, null, 2) + '\n');
-  console.log(`Source equivalence: 11 configurations, ${evidence.selections} selections, raw values, adjusted/raw scores, pass rates, N/A, formatting and old-only ranks identical.`);
+  console.log(`Source equivalence: 12 configurations, ${evidence.selections} selections, raw values, adjusted/raw scores, pass rates, N/A, formatting and old-only ranks identical.`);
 } finally { await browser.close(); }

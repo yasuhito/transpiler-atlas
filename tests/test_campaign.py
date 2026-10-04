@@ -29,13 +29,13 @@ def synthetic_document(root):
     )
     doc["protocol"].update(
         configurations=atlas.MEASURED_CONFIGURATIONS,
-        compilers=["qmap"],
-        sdk_packages={"qmap": "mqt.qmap"},
+        compilers=["cirq"],
+        sdk_packages={"cirq": "cirq-core"},
         worker_timeout_seconds=atlas.WORKER_TIMEOUT_SECONDS,
         seeds=atlas.SEEDS,
         timing_repeats=atlas.REPEATS,
-        qmap_pipeline=atlas.configuration_for("qmap-sc-heuristic-maponly-v1")["recipe"],
-        qmap_seed_note="Unseeded independent slots",
+        cirq_pipeline=atlas.configuration_for("cirq-routecqc-maponly-v1")["recipe"],
+        cirq_seed_note="Unseeded independent slots",
     )
     for field in (
         "timeout_retry_entries",
@@ -62,7 +62,7 @@ def synthetic_document(root):
         for target in ("line", "all-to-all")
         for seed in atlas.SEEDS
     ]
-    doc["environment"]["versions"]["mqt.qmap"] = "3.10.0"
+    doc["environment"]["versions"]["cirq-core"] = "1.7.0"
     (root / "RUN_STARTED").write_text("test-only\n")
     (root / "data/run.jsonl").write_text("test-only\n")
     return doc
@@ -71,7 +71,7 @@ def synthetic_document(root):
 def test_prepare_create_only_and_fixed_spec(workspace):
     spec = campaign.validate_workspace(workspace)
     assert spec["suite"] == atlas.SUITE
-    assert len(spec["configurations"]) == 12
+    assert len(spec["configurations"]) == 13
     assert len(spec["measurement_configurations"]) == 1
     assert spec["measured_entries"] == 72
     assert spec["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS == 420
@@ -96,9 +96,10 @@ def test_seal_rebuild_hash_and_closed_links(workspace, monkeypatch):
     doc = synthetic_document(workspace)
     campaign.finish(workspace, doc)
     snapshot = campaign.validate_completed(workspace)
-    assert snapshot["qmap_worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS
+    assert snapshot["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS
+    assert snapshot["seal_format_version"] == 2
     assert snapshot["measured_entries"] == 72
-    assert snapshot["reused_entries"] == 792
+    assert snapshot["reused_entries"] == 864
     raw = (workspace / "data/results.json").read_bytes()
     with pytest.raises(FileExistsError):
         campaign.finish(workspace, doc)
@@ -172,9 +173,9 @@ def test_real_subprocess_reads_copied_source_and_writes_only_own_artifacts(works
     (workspace / "RUN_STARTED").write_text("test\n")
     monkeypatch.setattr(atlas, "ROOT", workspace)
     case = next(c for c in campaign.input_cases(workspace) if c["id"] == "qft-4q")
-    result = atlas.execute_job(case, "qmap-sc-heuristic-maponly-v1", "line", 7, dict(os.environ))
+    result = atlas.execute_job(case, "cirq-routecqc-maponly-v1", "line", 7, dict(os.environ))
     assert result["status"] == "passed"
-    campaign.validate_record(workspace, result, case, "qmap-sc-heuristic-maponly-v1", "line", 7)
+    campaign.validate_record(workspace, result, case, "cirq-routecqc-maponly-v1", "line", 7)
     assert len(result["trials"]) == 3
     assert result["worker_timeout_seconds"] == 420
     assert sys.executable

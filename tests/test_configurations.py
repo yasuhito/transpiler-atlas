@@ -23,7 +23,7 @@ def test_display_annotations_are_separate_from_execution_registry():
         assert identifier in {c["id"] for c in atlas.CONFIGURATIONS}
     raw = json.loads((atlas.ROOT / "data/results.json").read_text())
     assert raw["protocol"]["configurations"] == [
-        c for c in atlas.CONFIGURATIONS if c["compiler"] != "qmap"
+        c for c in atlas.CONFIGURATIONS if c["compiler"] not in {"qmap", "cirq"}
     ]
     assert raw["suite"] == "pilot-v0.4"
     assert all("numerical_approximation" not in c for c in atlas.CONFIGURATIONS)
@@ -32,7 +32,9 @@ def test_display_annotations_are_separate_from_execution_registry():
 
 
 def test_configuration_registry_has_supported_levels_and_fixed_reference():
-    assert len({c["id"] for c in atlas.CONFIGURATIONS}) == 12
+    assert len({c["id"] for c in atlas.CONFIGURATIONS}) == 13
+    assert [c["id"] for c in atlas.MEASURED_CONFIGURATIONS] == ["cirq-routecqc-maponly-v1"]
+    assert not atlas.configuration_for("cirq-routecqc-maponly-v1")["seed_supported"]
     assert [c["optimization_level"] for c in atlas.CONFIGURATIONS if c["compiler"] == "qiskit"] == [
         0,
         1,

@@ -1,6 +1,32 @@
-# Pilot protocol and preserved v0.4 results
+# Pilot protocol and preserved measurements
 
-## Mixed-source suite: pilot-v0.5-qmap-mixed-budgets
+## Cirq addition: pilot-v0.6-cirq-mixed-budgets
+
+Only `cirq-routecqc-maponly-v1` is newly measured, with `cirq-core==1.7.0`.
+It uses the original frozen QASM2, RouteCQC and translation-only native lowering.
+No QMAP optimization-enabled configuration is added. See [Cirq recipe](cirq.md).
+
+The standalone `pilot-cirq-routecqc-v1-420s` cohort has 72 entries, three real
+compilations per entry, and a 420-second full-worker budget. Slots 7/19/43 repeat
+an unseeded pipeline (`seed_supported=False`), not a fictitious mapper RNG seed.
+The combined dataset has 936 entries and 13 configurations from three sources:
+792 unchanged v0.4 records, 72 unchanged QMAP v1 records, and 72 new Cirq records.
+Source budgets, environments and windows remain separate. v0.4 retains 750
+initial 120-second outcomes and 42 timeout-only 600-second retries; QMAP v1 and
+Cirq each retain their own 420-second window. This is not a matched-budget rerun.
+No historical raw file, attempt, artifact, snapshot or publication selector is
+replaced. Scores and the reused Qiskit L2 reference are unchanged.
+
+```sh
+uv sync --frozen
+uv run --frozen python atlas.py campaign --into /tmp/ta-cirq/campaigns
+```
+
+Do not run tests or other BQSKit work concurrently with measurement. Each fresh
+workspace admits Cirq only and measures once. Interrupted workspaces cannot resume
+or selectively retry. A completed local report can be built without publication.
+
+## Preserved mixed-source suite: pilot-v0.5-qmap-mixed-budgets
 
 The approved decision replaces the proposed 864-worker rerun with a **QMAP-only
 campaign of 72 entries**: 12 frozen inputs × 2 targets × 3 seed slots, each with
