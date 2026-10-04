@@ -1,5 +1,6 @@
 import json
 import shutil
+import subprocess
 
 import pytest
 from publication_fixtures import qmap_publication_map
@@ -89,12 +90,39 @@ def test_cirq_publication_and_explicit_predecessor_ignore_current_selector(tmp_p
     shutil.copyfile(root / "history/pilot-v0.5/data/results.json", root / old_raw)
     inherited["data/results.json"] = old_raw
     (root / old_map).write_text(json.dumps(inherited))
+    # This copied source is its own repository, never a descendant relying on Git discovery.
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "-c",
+            "user.name=Publication fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "Initialize publication fixture",
+        ],
+        check=True,
+    )
+    fixture_commit = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    assert subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "--show-toplevel"], text=True
+    ).strip() == str(root.resolve())
     monkeypatch.setattr(atlas, "ROOT", root)
     with pytest.raises(ValueError, match="already owns"):
         campaign.create(tmp_path / "rejected", prepare_only=True)
     (root / "publication.json").write_text("invalid current selector")
     prepared = campaign.create(tmp_path / "explicit", prepare_only=True, inherited_file_map=old_map)
     checked = campaign.validate_workspace(prepared)
+    assert checked["source_commit"] == fixture_commit
     assert checked["configurations"] == spec["configurations"]
     assert checked["measurement_configurations"] == atlas.MEASURED_CONFIGURATIONS
 
