@@ -1,0 +1,668 @@
+{
+  "spec_format_version": 3,
+  "kind": "compile-retention",
+  "campaign_id": "pilot-compile-retention-v1-420s-check60-20261004T103210Z-ab636462-0f9a-431e-8517-44fd8d06a596",
+  "suite": "pilot-compile-retention-v1-420s-check60",
+  "source_commit": "6c01f4f1df77059c110938c2d369bf5d1189c20c",
+  "source_clean": true,
+  "created_at": "2026-10-04T10:32:10.454210+00:00",
+  "policy": {
+    "repeats": 3,
+    "whole_job_seconds": 420,
+    "check_hard_seconds": 60,
+    "qcec_cooperative_seconds": 20,
+    "order": "compile-all-then-verify",
+    "deadline_policy": "observed-exit-before-cutoff",
+    "transport": "native-QPY",
+    "kind": "compile-retention",
+    "protocol_version": 1
+  },
+  "shuffle_seed": 20261004,
+  "schedule": [
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l4",
+      "target": "all-to-all",
+      "seed": 43
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l4",
+      "target": "line",
+      "seed": 43
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l2",
+      "target": "all-to-all",
+      "seed": 7
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l4",
+      "target": "line",
+      "seed": 19
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l4",
+      "target": "all-to-all",
+      "seed": 7
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l4",
+      "target": "all-to-all",
+      "seed": 19
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l3",
+      "target": "line",
+      "seed": 43
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l4",
+      "target": "line",
+      "seed": 7
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l3",
+      "target": "all-to-all",
+      "seed": 19
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l2",
+      "target": "all-to-all",
+      "seed": 43
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l3",
+      "target": "line",
+      "seed": 19
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l2",
+      "target": "line",
+      "seed": 7
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l3",
+      "target": "all-to-all",
+      "seed": 43
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l2",
+      "target": "line",
+      "seed": 19
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l3",
+      "target": "all-to-all",
+      "seed": 7
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l3",
+      "target": "line",
+      "seed": 7
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l2",
+      "target": "all-to-all",
+      "seed": 19
+    },
+    {
+      "case_id": "qasmbench-ising_n10",
+      "configuration_id": "bqskit-l2",
+      "target": "line",
+      "seed": 43
+    }
+  ],
+  "cases": [
+    {
+      "id": "qasmbench-ising_n10",
+      "family": "Hamiltonian",
+      "qubits": 10,
+      "parameters": {
+        "variant": "ising_n10",
+        "removed_instructions": {
+          "measure": 10,
+          "barrier": 0
+        }
+      },
+      "provenance": {
+        "corpus": "QASMBench",
+        "revision": "357b942396d5c2b7cbc1c229c585a6ef5ccaebac",
+        "url": "https://github.com/pnnl/QASMBench/blob/357b942396d5c2b7cbc1c229c585a6ef5ccaebac/small/ising_n10/ising_n10.qasm",
+        "source_path": "corpora/qasmbench/ising_n10.qasm",
+        "source_sha256": "c10edc4a40eadf4d610aa012524e9eed4bdd1a02fc9d939cccae8ad4ed942f67",
+        "license_path": "corpora/qasmbench/LICENSE",
+        "transformation": "remove barriers and per-wire terminal measurements; retain preparation; Qiskit level-0 lowering"
+      },
+      "path": "data/inputs/qasmbench-ising_n10.qasm",
+      "sha256": "49da75e56099c709d500552270718e7395a755ebe2e7329786db9ea8e139c5e0",
+      "input_gate_count": 480
+    }
+  ],
+  "configurations": [
+    {
+      "id": "bqskit-l2",
+      "compiler": "bqskit",
+      "label": "Level 2 \u00b7 2Q blocks",
+      "optimization_level": 2,
+      "seed_supported": true
+    },
+    {
+      "id": "bqskit-l3",
+      "compiler": "bqskit",
+      "label": "Level 3 \u00b7 2Q blocks",
+      "optimization_level": 3,
+      "seed_supported": true
+    },
+    {
+      "id": "bqskit-l4",
+      "compiler": "bqskit",
+      "label": "Level 4 \u00b7 2Q blocks",
+      "optimization_level": 4,
+      "seed_supported": true
+    }
+  ],
+  "protocol": {
+    "kind": "compile-retention",
+    "protocol_version": 1,
+    "score_version": "qcec-adjusted-partial-v2",
+    "configurations": [
+      {
+        "id": "bqskit-l2",
+        "compiler": "bqskit",
+        "label": "Level 2 \u00b7 2Q blocks",
+        "optimization_level": 2,
+        "seed_supported": true
+      },
+      {
+        "id": "bqskit-l3",
+        "compiler": "bqskit",
+        "label": "Level 3 \u00b7 2Q blocks",
+        "optimization_level": 3,
+        "seed_supported": true
+      },
+      {
+        "id": "bqskit-l4",
+        "compiler": "bqskit",
+        "label": "Level 4 \u00b7 2Q blocks",
+        "optimization_level": 4,
+        "seed_supported": true
+      }
+    ],
+    "compilers": [
+      "bqskit"
+    ],
+    "sdk_packages": {
+      "bqskit": "bqskit"
+    },
+    "seeds": [
+      7,
+      19,
+      43
+    ],
+    "ordered_schedule": [
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "all-to-all",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "line",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "all-to-all",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "line",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "all-to-all",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "all-to-all",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "line",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "line",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "all-to-all",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "all-to-all",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "line",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "line",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "all-to-all",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "line",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "all-to-all",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "line",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "all-to-all",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "line",
+        "seed": 43
+      }
+    ],
+    "timing_repeats": 3,
+    "reference_configuration": "qiskit-l2",
+    "worker_timeout_seconds": 420,
+    "verification_hard_timeout_seconds": 60,
+    "checker_options": {
+      "run_simulation_checker": false,
+      "run_zx_checker": false,
+      "parallel": false,
+      "nthreads": 1,
+      "timeout": 20
+    },
+    "basis": [
+      "cx",
+      "rz",
+      "sx",
+      "x"
+    ],
+    "physical_qubits": "equal to input width",
+    "timer": "unchanged atlas.compile_once; excludes parse, export, checks and runtime setup/teardown",
+    "qiskit_pipeline": "preset levels 0/1/2/3, approximation_degree=1.0",
+    "bqskit_pipeline": {
+      "optimization_levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "max_synthesis_size": 2,
+      "synthesis_epsilon": 1e-12,
+      "num_workers": 1,
+      "num_blas_threads": 1,
+      "with_mapping": true,
+      "error_threshold": null
+    },
+    "validation": "strict native QPY with logical-to-physical maps and scalar phase; QCEC 3.10.1",
+    "output_commit": "create-only QASM + QPY + manifest last, file and directory fsync",
+    "cleanup": "single parent-owned group, SIGKILL + direct wait + subreaper waitpid + group absence",
+    "partial_raw": "median of committed repeats, then seed medians, with coverage; no missing-case exclusion",
+    "normalization": "only where necessary raw and reference exist; unfinished verification alone is not N/A",
+    "cold_worker": true
+  },
+  "versions": {
+    "pyspnego": "0.12.3",
+    "nanobind-backend": "1.0.0",
+    "typing-inspection": "0.4.4",
+    "qiskit-qasm3-import": "0.6.0",
+    "qwasm": "1.0.1",
+    "ply": "3.11",
+    "MarkupSafe": "3.0.3",
+    "certifi": "2026.7.22",
+    "pycparser": "3.0",
+    "pluggy": "1.6.0",
+    "pybase64": "1.5.0",
+    "idna": "3.20",
+    "pytket-qiskit": "0.78.0",
+    "mqt-qcec": "3.10.1",
+    "charset-normalizer": "3.5.2",
+    "six": "1.17.0",
+    "packaging": "26.3",
+    "typing_extensions": "4.16.0",
+    "orjson": "3.12.0",
+    "annotated-types": "0.8.0",
+    "requests": "2.34.2",
+    "duet": "0.2.9",
+    "PyJWT": "2.15.1",
+    "qiskit-mitigation": "0.1.1",
+    "ibm-cloud-sdk-core": "3.26.2",
+    "urllib3": "2.8.0",
+    "Markdown": "3.11",
+    "bqskitrs": "0.4.1",
+    "requests_ntlm": "1.3.0",
+    "tqdm": "4.70.1",
+    "stevedore": "5.9.1",
+    "graphviz": "0.21",
+    "lark": "1.3.1",
+    "cycler": "0.12.1",
+    "Jinja2": "3.1.6",
+    "dill": "0.4.1",
+    "iniconfig": "2.3.0",
+    "ibm-platform-services": "0.77.1",
+    "cffi": "2.1.1",
+    "python-dateutil": "2.9.0.post0",
+    "antlr4-python3-runtime": "4.13.2",
+    "attrs": "26.1.0",
+    "ruff": "0.16.10",
+    "openqasm3": "1.0.1",
+    "kiwisolver": "1.5.1",
+    "pydantic_core": "2.46.5",
+    "pyparsing": "3.3.3",
+    "contourpy": "1.4.0",
+    "ibm-quantum-schemas": "0.12.20260921",
+    "rustworkx": "0.18.1",
+    "pytest": "9.1.1",
+    "mpmath": "1.3.0",
+    "samplomatic": "0.21.0",
+    "cryptography": "50.0.2",
+    "pydantic": "2.13.5",
+    "mqt-qmap": "3.10.0",
+    "pillow": "12.3.0",
+    "mqt-core": "3.10.1",
+    "pytket": "2.18.4",
+    "bqskit": "1.2.1",
+    "setuptools": "84.0.0",
+    "Pygments": "2.21.0",
+    "fonttools": "4.66.1",
+    "symengine": "0.14.1",
+    "qiskit-ibm-runtime": "0.50.0",
+    "networkx": "3.7",
+    "matplotlib": "3.11.2",
+    "qiskit": "2.5.2",
+    "numpy": "2.5.3",
+    "cirq-core": "1.7.0",
+    "scipy": "1.18.1",
+    "pandas": "3.0.6",
+    "sympy": "1.14.0"
+  },
+  "planned_affinity": [
+    0
+  ],
+  "thread_env": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "RAYON_NUM_THREADS": "1",
+    "QISKIT_NUM_PROCS": "1"
+  },
+  "host": {
+    "cpu": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "platform": "Linux-7.2.5-3-omarchy-x86_64-with-glibc2.44",
+    "python": "3.12.4",
+    "exclusive_machine": false,
+    "memory_limit_enforced": false
+  },
+  "origin": {
+    "purpose": "historical-timeout-diagnostic",
+    "selector_path": "publication.json",
+    "file_map_path": "data/campaigns/pilot-v0.6-cirq-mixed-budgets-20261004T035919Z-e943bb3f-7dbf-4936-93df-7345d1634dc3/file-map.json",
+    "raw_path": "data/campaigns/pilot-v0.6-cirq-mixed-budgets-20261004T035919Z-e943bb3f-7dbf-4936-93df-7345d1634dc3/data/results.json",
+    "timeout_identities": [
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "all-to-all",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "all-to-all",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "all-to-all",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "line",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "line",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l2",
+        "target": "line",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "all-to-all",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "all-to-all",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "all-to-all",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "line",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "line",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l3",
+        "target": "line",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "all-to-all",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "all-to-all",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "all-to-all",
+        "seed": 43
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "line",
+        "seed": 7
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "line",
+        "seed": 19
+      },
+      {
+        "case_id": "qasmbench-ising_n10",
+        "configuration_id": "bqskit-l4",
+        "target": "line",
+        "seed": 43
+      }
+    ]
+  },
+  "source_inventory": {
+    "atlas.py": "44659f025a6d5a746c52adda0035da9526730fd9ee7ee2f357ce46259e5b8658",
+    "qmap_adapter.py": "6e5582e98af6bc7a576bdc2f812baaa48d7b3df64461ead7eb55edba1c78312d",
+    "cirq_adapter.py": "002dbdc33192b48d7ba6430f04b5ad3286d07ea5aea90601fd482d2fdeaef1b8",
+    "publication.py": "18be9e7dc88e767d008eb3013d06727b2188e3bcc6943ed28495c8f69a498e3c",
+    "campaign.py": "aed8a6f0848a1ba8be64a5cdee7205cec70fe43065f074e5b8a00c73d0707e31",
+    "mixed_sources.py": "7a15db68a52c326627ae08ad690c23890f46fabe520478c0b2035d358373bb66",
+    "build_site.py": "ce1eb827d80246a4cc35eb13c41398eb3b63660afb914bc4da6802b8eb71ad71",
+    "pyproject.toml": "a73ce19075d2c2ca961ba53c662d6db849f1fc654c066efb2512583d6a5baecc",
+    "uv.lock": "46b8dfbb57135283f824e067f9e71b7e678e5f948a098b6acbb635f108579f69",
+    "package.json": "e3f6317245b15691032be1c8a23f888af845cae8f93c3b64c4e28ad5a7a18d05",
+    "package-lock.json": "92a749bc30d5fa68edb478810cd46fae9d0c2aab245538d1ced8d90a4e6bea0f",
+    "retention.py": "535439f3629b0a3f43b96e49d0f24bd05c6abec21dc9b34062881cd72e37afe9",
+    "retention_campaign.py": "93aa94bd47e7690f71e6f0df2ba4851cde983f82e586d529e7322181056a649c"
+  },
+  "files": {
+    "atlas.py": "44659f025a6d5a746c52adda0035da9526730fd9ee7ee2f357ce46259e5b8658",
+    "build_site.py": "ce1eb827d80246a4cc35eb13c41398eb3b63660afb914bc4da6802b8eb71ad71",
+    "campaign.py": "aed8a6f0848a1ba8be64a5cdee7205cec70fe43065f074e5b8a00c73d0707e31",
+    "cirq_adapter.py": "002dbdc33192b48d7ba6430f04b5ad3286d07ea5aea90601fd482d2fdeaef1b8",
+    "corpora/qasmbench/LICENSE": "3ba843379e9d16d4cc80e971f530c20053afbbb8da94de3c5e945d3212d91cd3",
+    "corpora/qasmbench/adder_n4.qasm": "30f0be9eb50d37ab2de7c87676e32ff7c66bc67eff32dfeafa0cf69951d92438",
+    "corpora/qasmbench/grover_n2.qasm": "afd134759fa0eefb9f84a88d3e9f156cd54e83b10177d02c33bb6f519c08b813",
+    "corpora/qasmbench/ising_n10.qasm": "c10edc4a40eadf4d610aa012524e9eed4bdd1a02fc9d939cccae8ad4ed942f67",
+    "corpora/qasmbench/qaoa_n3.qasm": "4dc17a12b187cc3cf02962cf023a36de4cc48ed3923343ab9ef84e3daf89f5c7",
+    "corpora/qasmbench/qft_n4.qasm": "62c6c8c7ddd95ac2b5367420b9925dbf82d6fb45725f089f01619a639621ad60",
+    "corpora/qasmbench/vqe_n4.qasm": "f6777e4fdd8eadcbc8a85a5135e797a96d3b91b3f494593a5b8c9fdcd37530c6",
+    "data/inputs/adder-6q.qasm": "3fb631476a3404295f8a73b23f198855872b46a7ffd587ffb8dfe4a71d89f831",
+    "data/inputs/adder-8q.qasm": "ea0837e4fc8885524a2ab4577785d4563bbb3c1cfdc35264e0c7e6a02a2b67cd",
+    "data/inputs/qaoa-4q.qasm": "05bebb811e52758dd6dda1d97d38e5dff3f80323dc1ee63b3001bc360885574d",
+    "data/inputs/qaoa-6q.qasm": "715580c150526450ae7a5156572374b266fe8c4cafac54bf68bf106a61f6a3fc",
+    "data/inputs/qasmbench-adder_n4.qasm": "f7c1f987fce2a0dc6980f55caf807c9d253d7887f0a6be1da6d437988af6f5c9",
+    "data/inputs/qasmbench-grover_n2.qasm": "49966d99b07cd880c3fc2790288db44a60a9285c664d0da20a67c2f136ef572b",
+    "data/inputs/qasmbench-ising_n10.qasm": "49da75e56099c709d500552270718e7395a755ebe2e7329786db9ea8e139c5e0",
+    "data/inputs/qasmbench-qaoa_n3.qasm": "b1854829de6f803decb0efadd4e3b3a4c3fb89894296734de99fa0b6d0247723",
+    "data/inputs/qasmbench-qft_n4.qasm": "dfafd6053253c70342bb3c6fb7cadfb30d77c8e93ba517900419d0e7ebbe8987",
+    "data/inputs/qasmbench-vqe_n4.qasm": "f6c2917bb1be5ede5f68dd2ce225a9bb7ac413212438e414eb55707854f8998a",
+    "data/inputs/qft-4q.qasm": "3803a0e003593e49dd2a77411d9b237325ccd57bb40f6a0bcf1c7f638659a802",
+    "data/inputs/qft-6q.qasm": "31e0a7b5ec6b31c862e2fe60b094f61dd58a6cab22e8276db527f906c5e919c8",
+    "data/manifest.json": "864d73a813ed43e8e2576eaca51dff403042c43c92d0f77530ad35026abafd41",
+    "docs/bqskit.md": "e61ee583c0ab4313ac1b66aa36f57eb2873e337d06f9d55fc8979c5216e7fec2",
+    "docs/cirq.md": "00f08d6c01a8cdc9b0e94f506c68d1a21c07040b3672af1925092fb28ab3a02f",
+    "docs/corpora.md": "f493d5fd9e4650910b09b9ba09b47699f851a87c4d07737fc95d3c6d685c2b0d",
+    "docs/design.md": "15b00cdae23f77551cbc49c633e540eee53f3488a09e0f9930a830f1a576ab21",
+    "docs/methodology.md": "2974154c2942c5df9f000888f9a21aefebc58156c498400b53226cf7ddc168b6",
+    "docs/pilot.md": "eb8842b39f864b1df0f28873fbd8e124731ecd33841fe994db5ed304b016f9e2",
+    "docs/publication.md": "7a5bfb0b2d88319472722f3ce8b509b2b2780680275529a3ea250c493dbe42a7",
+    "docs/qmap.md": "0206626f29752acb6dce6e61ffc3885348bd6bc02b02d71d80ee04e41192ee3d",
+    "docs/research.md": "655cea0bfabb20a4c6c85ee1c218f6a77304ae51d1016616154cc9b618ab8f59",
+    "docs/retention.md": "eb8842b39f864b1df0f28873fbd8e124731ecd33841fe994db5ed304b016f9e2",
+    "mixed_sources.py": "7a15db68a52c326627ae08ad690c23890f46fabe520478c0b2035d358373bb66",
+    "origin/MEASUREMENT_COMPLETE": "48461a028b095d03f96412d8ae33f054e2c2b0fdfa1d4a439ebec4da65397bd9",
+    "origin/file-map.json": "8067d60d925ca03a604fc57636138c6c5a45b15a6a61267a845e42935bbd7b30",
+    "origin/legacy-results.json": "25004cdf225041e2da98005a1146d3c1d7ee806529a0a3992cc4a88f85054a72",
+    "origin/publication.json": "82d96a786670706206ae651ca61a715e29c6613eaed1c0381d1e25b7feae6e75",
+    "origin/results.json": "3223cf3da2164b44a625b2ea38a7ec722ec8a555a8f5ceb45717f7f9810db5fe",
+    "origin/snapshot-manifest.json": "b55129ee3a30eb95094d8e12f71342d60af496b44595db1412d27c4ae01db3df",
+    "package-lock.json": "92a749bc30d5fa68edb478810cd46fae9d0c2aab245538d1ced8d90a4e6bea0f",
+    "package.json": "e3f6317245b15691032be1c8a23f888af845cae8f93c3b64c4e28ad5a7a18d05",
+    "publication.py": "18be9e7dc88e767d008eb3013d06727b2188e3bcc6943ed28495c8f69a498e3c",
+    "pyproject.toml": "a73ce19075d2c2ca961ba53c662d6db849f1fc654c066efb2512583d6a5baecc",
+    "qmap_adapter.py": "6e5582e98af6bc7a576bdc2f812baaa48d7b3df64461ead7eb55edba1c78312d",
+    "retention.py": "535439f3629b0a3f43b96e49d0f24bd05c6abec21dc9b34062881cd72e37afe9",
+    "retention_campaign.py": "93aa94bd47e7690f71e6f0df2ba4851cde983f82e586d529e7322181056a649c",
+    "uv.lock": "46b8dfbb57135283f824e067f9e71b7e678e5f948a098b6acbb635f108579f69",
+    "web/app.js": "9b7e26ffdb47969311a8ada24b436a30406496f7d6345f4ff8334a0b81082dc4",
+    "web/report.html": "3a9281a0b09f88d885372157c35d559ec8cf34ae3e90db36fefa00457e710eda",
+    "web/style.css": "d4215143dc88fa8ed90ed43be12abb85d41e509fa24d9e81942e72ec92d2a951",
+    "web/theme.css": "6d772e16871c9a46ee2d6e60f8e0b12d244033ebdacacad8817f5c2e519e5071",
+    "web/theme.js": "0fab4477aaf37e9bd5b9df1f2008b957e2859586d5d757322c72b40033ef3412"
+  },
+  "execution_identities": [
+    "597e7464301f623792fe11652fa4bd4ad4dccbd5e321955a937701998592a16c",
+    "3270a1fd53a21ee4e77d949d4f7998c476089894eb6ca525e209755357c4c62e",
+    "d9524f1554593109b3716b829cf340346e192a77194a512a5c597a00b8067abe",
+    "ea3909f8f64e9bbd75ca52b81cd793c706e1ee1778a0f80679ff77066922fa6c",
+    "5032b2fa19a4c829c5aab4a262971bbc6139ae1b771f85fbbc3c49bfc11ec633",
+    "d1b8f8ddf4af6035df19e2ce30811f483de9352bc39234f547ee7fe6b6eb16e0",
+    "830b3b7fd17bbcacecb9b92556e54c02e2ac2c03b4093c7f5ef639d57c5f4700",
+    "757b751090af1dab4e3cfc17fcf35af555428ff55f4ec5482f8f017a6c3e6476",
+    "bfe7cc6ccb2f02c89fc5483f1ab2df3caf7d9c015e38fa7fbf3af21e4cbbc2d8",
+    "2d1e02e36d2df75e280aaf119334dc86c79293decc82c7706f553fb5aceac258",
+    "22aaa443d99dd20ee54fa51f716bbcf5f9df1874024dfdac199f5c03d9f4899b",
+    "d3a20375e3c94d5ce00460d4e730de2e89856958b4d5f071a29246a7cd5fbfd9",
+    "ad73537e2b2e410243dc1e9fd71314d9328483314cc30c49de22202698436db3",
+    "5d7649acdece41235870595917445bac0c7648635a85782f243599081b56c902",
+    "b3e8527e8357ac1cffcb10a31b277ad459534a3de94544d770eaf0db079d8356",
+    "917c645ed0d79694800e6c586e3d11cde8239a205758d68c76faa48f5d0c1654",
+    "278bc9f32250bb74a24970179da4714ccfafee82012d593dc43a6073c9b894a3",
+    "19dc2d37c7b176f5fd773f4e4415644a7843ca12be315864b1dafa116060c7df"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "job": {
+    "case_id": "qasmbench-ising_n10",
+    "configuration_id": "bqskit-l2",
+    "target": "line",
+    "seed": 43
+  },
+  "status": "verification_incomplete",
+  "saved": 3,
+  "accepted": 0,
+  "fault": null,
+  "repeats_required": 3,
+  "timing_samples_ms": [
+    12533.289459,
+    12810.36693,
+    15141.072751
+  ],
+  "compile_ms": 12810.36693,
+  "quality": null,
+  "speed": null,
+  "score_na_reason": "standalone_raw_diagnostic",
+  "compile_process": {
+    "state": "completed",
+    "pid": 360104,
+    "wall_seconds": 43.1707773511298,
+    "deadline_monotonic": 1060609.619564463,
+    "observed_monotonic": 1060232.850549481,
+    "returncode": 0,
+    "cleanup_seconds": 0.045878947945311666,
+    "members_before_cleanup": [
+      {
+        "pid": 360104,
+        "ppid": 2638673,
+        "state": "Z"
+      }
+    ],
+    "adopted_reaped": [],
+    "members_after_cleanup": []
+  },
+  "wall_seconds": 223.54157955618575,
+  "trials": [
+    {
+      "compile": {
+        "repeat": 0,
+        "manifest_path": "r0.compile.json",
+        "compile_ms": 12533.289459
+      },
+      "check": {
+        "state": "verification_incomplete",
+        "criterion": null,
+        "reason": "hard_timeout",
+        "wall_seconds": 59.99993641208857
+      }
+    },
+    {
+      "compile": {
+        "repeat": 1,
+        "manifest_path": "r1.compile.json",
+        "compile_ms": 12810.36693
+      },
+      "check": {
+        "state": "verification_incomplete",
+        "criterion": null,
+        "reason": "hard_timeout",
+        "wall_seconds": 59.99993320507929
+      }
+    },
+    {
+      "compile": {
+        "repeat": 2,
+        "manifest_path": "r2.compile.json",
+        "compile_ms": 15141.072751
+      },
+      "check": {
+        "state": "verification_incomplete",
+        "criterion": null,
+        "reason": "hard_timeout",
+        "wall_seconds": 59.99994206009433
+      }
+    }
+  ]
+}

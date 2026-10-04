@@ -1,0 +1,3 @@
+# Frozen campaign source is hash-authenticated evidence, not editable application code.
+extend = "pyproject.toml"
+extend-exclude = ["data/campaigns"]

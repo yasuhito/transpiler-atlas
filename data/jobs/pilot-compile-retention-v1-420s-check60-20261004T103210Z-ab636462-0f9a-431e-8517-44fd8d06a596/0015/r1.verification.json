@@ -1,0 +1,29 @@
+{
+  "compile_manifest_sha256": "d52dd1c37a7ce2a16b603482f9f5a8c853058e890011123df8c4f4487587e0f7",
+  "check": {
+    "state": "verification_incomplete",
+    "criterion": null,
+    "reason": "hard_timeout",
+    "wall_seconds": 59.99979667784646
+  },
+  "process": {
+    "state": "timeout",
+    "pid": 226610,
+    "wall_seconds": 59.99979667784646,
+    "deadline_monotonic": 1059906.927027957,
+    "observed_monotonic": 1059906.927117776,
+    "returncode": -9,
+    "cleanup_seconds": 0.08814567606896162,
+    "members_before_cleanup": [
+      {
+        "pid": 226610,
+        "ppid": 2638673,
+        "state": "R"
+      }
+    ],
+    "adopted_reaped": [],
+    "members_after_cleanup": []
+  },
+  "effective_budget_seconds": 59.99999740999192,
+  "validation": null
+}

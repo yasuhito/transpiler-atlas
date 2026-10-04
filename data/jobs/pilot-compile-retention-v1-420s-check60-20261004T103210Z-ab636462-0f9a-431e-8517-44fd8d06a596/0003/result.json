@@ -1,0 +1,82 @@
+{
+  "job": {
+    "case_id": "qasmbench-ising_n10",
+    "configuration_id": "bqskit-l4",
+    "target": "line",
+    "seed": 19
+  },
+  "status": "verification_incomplete",
+  "saved": 3,
+  "accepted": 0,
+  "fault": null,
+  "repeats_required": 3,
+  "timing_samples_ms": [
+    55694.882407,
+    55306.836628,
+    61433.851965
+  ],
+  "compile_ms": 55694.882407,
+  "quality": null,
+  "speed": null,
+  "score_na_reason": "standalone_raw_diagnostic",
+  "compile_process": {
+    "state": "completed",
+    "pid": 2989073,
+    "wall_seconds": 175.00158136687241,
+    "deadline_monotonic": 1056723.308389942,
+    "observed_monotonic": 1056478.338172793,
+    "returncode": 0,
+    "cleanup_seconds": 0.04802785301581025,
+    "members_before_cleanup": [
+      {
+        "pid": 2989073,
+        "ppid": 2638673,
+        "state": "Z"
+      }
+    ],
+    "adopted_reaped": [],
+    "members_after_cleanup": []
+  },
+  "wall_seconds": 355.32698309305124,
+  "trials": [
+    {
+      "compile": {
+        "repeat": 0,
+        "manifest_path": "r0.compile.json",
+        "compile_ms": 55694.882407
+      },
+      "check": {
+        "state": "verification_incomplete",
+        "criterion": null,
+        "reason": "hard_timeout",
+        "wall_seconds": 59.999840984120965
+      }
+    },
+    {
+      "compile": {
+        "repeat": 1,
+        "manifest_path": "r1.compile.json",
+        "compile_ms": 55306.836628
+      },
+      "check": {
+        "state": "verification_incomplete",
+        "criterion": null,
+        "reason": "hard_timeout",
+        "wall_seconds": 59.99992899899371
+      }
+    },
+    {
+      "compile": {
+        "repeat": 2,
+        "manifest_path": "r2.compile.json",
+        "compile_ms": 61433.851965
+      },
+      "check": {
+        "state": "verification_incomplete",
+        "criterion": null,
+        "reason": "hard_timeout",
+        "wall_seconds": 59.9999663089402
+      }
+    }
+  ]
+}

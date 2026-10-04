@@ -1,0 +1,63 @@
+{
+  "job": {
+    "case_id": "qasmbench-ising_n10",
+    "configuration_id": "bqskit-l3",
+    "target": "all-to-all",
+    "seed": 43
+  },
+  "repeat": 1,
+  "spec_sha256": "cc60bd33164384393976d2f90f1d2437a0f9c95cab04a8691c621e044a43d0d6",
+  "input_sha256": "49da75e56099c709d500552270718e7395a755ebe2e7329786db9ea8e139c5e0",
+  "compile_ms": 35239.814212,
+  "initial_map": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "final_map": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "global_phase": 0.0,
+  "metrics": {
+    "two_qubit_count": 90,
+    "two_qubit_depth": 20,
+    "total_depth": 97,
+    "one_qubit_count": 597,
+    "gate_counts": {
+      "sx": 332,
+      "cx": 90,
+      "rz": 265
+    }
+  },
+  "layout_semantics": "input declaration order logical-to-physical",
+  "qiskit_version": "2.5.2",
+  "compiled_return_wall_ns": 1791113679438293169,
+  "output_rules": "valid",
+  "qasm": {
+    "path": "r1.qasm",
+    "sha256": "900deeb1b547538343cc7c273436b572d2a34a69e540e7a0b6b974fea870cd0f",
+    "mtime_ns": 1791113679447398201
+  },
+  "qpy": {
+    "path": "r1.qpy",
+    "sha256": "8e65490b277ad5e6044c326069746348ebfb249a91e6b06d50d042a377b16cb4",
+    "mtime_ns": 1791113679447680073
+  },
+  "qpy_format_header_hex": "5149534b4954110205020000"
+}

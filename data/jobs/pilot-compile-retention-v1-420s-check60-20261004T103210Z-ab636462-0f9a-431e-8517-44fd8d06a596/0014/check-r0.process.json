@@ -1,0 +1,18 @@
+{
+  "state": "timeout",
+  "pid": 104297,
+  "wall_seconds": 59.99991564382799,
+  "deadline_monotonic": 1059585.44200807,
+  "observed_monotonic": 1059585.442077929,
+  "returncode": -9,
+  "cleanup_seconds": 0.0897837420925498,
+  "members_before_cleanup": [
+    {
+      "pid": 104297,
+      "ppid": 2638673,
+      "state": "R"
+    }
+  ],
+  "adopted_reaped": [],
+  "members_after_cleanup": []
+}
