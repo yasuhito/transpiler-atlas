@@ -88,8 +88,9 @@ try {
   assert.match(await qftFamily.innerText(), /Numerical approximation\./);
   await qftFamily.locator('summary').click();
   await page.locator('#environment summary').click();
-  assert.match(await page.locator('#environment-fields').innerText(), /600 s per circuit/);
-  assert.match(await page.locator('#environment-fields').innerText(), /42 initial 120 s timeouts/);
+  assert.match(await page.locator('#environment-fields').innerText(), /Initially 120 s per worker; only 42 initial timeouts retried at 600 s/);
+  assert.match(await page.locator('#budget-note').innerText(), /750 initial outcomes retained/);
+  assert.match(await page.locator('#environment-fields').innerText(), /Initial attempt snapshot: data\/attempts\/pilot-v0\.4-120s\.json/);
   await page.locator('#environment summary').click();
   for (const sdk of raw.protocol.compilers) {
     await page.selectOption('#compiler', sdk);
