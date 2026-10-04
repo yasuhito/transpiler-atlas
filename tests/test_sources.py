@@ -2,6 +2,7 @@ import copy
 import json
 
 import pytest
+from publication_fixtures import qmap_publication_map
 from test_campaign import synthetic_document
 
 import atlas
@@ -11,7 +12,11 @@ import mixed_sources
 
 @pytest.fixture
 def sealed(tmp_path):
-    root = campaign.create(tmp_path / "campaigns", prepare_only=True)
+    root = campaign.create(
+        tmp_path / "campaigns",
+        prepare_only=True,
+        inherited_file_map=qmap_publication_map(atlas.ROOT),
+    )
     campaign.finish(root, synthetic_document(root))
     return root, json.loads((root / "data/results.json").read_text())
 
@@ -30,7 +35,9 @@ def test_budget_provenance_not_a_uniform_retry_budget(sealed):
     assert p["initial_attempt_snapshot"] == "data/attempts/pilot-v0.4-120s.json"
     assert (root / "history/pilot-v0.4" / p["initial_attempt_snapshot"]).is_file()
     assert data["protocol"]["reference_configuration"] == "qiskit-l2"
-    assert len(data["results"]) == 936
+    assert len(data["results"]) == len(data["cases"]) * len(
+        data["protocol"]["configurations"]
+    ) * 2 * len(data["protocol"]["seeds"])
     assert set(data["protocol"]["measurement_sources"]) == {"v0.4", "qmap420", "cirq420"}
 
 
@@ -54,7 +61,9 @@ def test_reused_records_are_exact_and_artifacts_resolve(sealed):
 def test_worker_rejects_unmeasured_legacy_configuration(sealed):
     root, data = sealed
     # Completed roots reject every job; use a fresh prepared root to test membership.
-    fresh = campaign.create(root.parent / "next", prepare_only=True)
+    fresh = campaign.create(
+        root.parent / "next", prepare_only=True, inherited_file_map=qmap_publication_map(atlas.ROOT)
+    )
     (fresh / "RUN_STARTED").write_text("test\n")
     case = campaign.input_cases(fresh)[0]
     with pytest.raises(ValueError, match="schedule"):

@@ -271,7 +271,7 @@ def combine_cirq(root, cirq, resolve):
     actual = [
         (r["case_id"], r["configuration_id"], r["target"], r["seed"]) for r in data["results"]
     ]
-    if len(actual) != len(expected) or set(actual) != expected or len(actual) != 936:
+    if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError("Combined schedule is incomplete or duplicated")
     data["environment"] = {
         "cpu": "Mixed sources; see source environments",

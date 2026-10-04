@@ -90,7 +90,7 @@ def preflight():
     return {d.metadata["Name"]: d.version for d in importlib.metadata.distributions()}
 
 
-def create(into, *, prepare_only=False):
+def create(into, *, prepare_only=False, inherited_file_map=None):
     import atlas
 
     source = atlas.ROOT.resolve()
@@ -105,6 +105,20 @@ def create(into, *, prepare_only=False):
     ):
         raise ValueError("Protected destination")
     cases = input_cases(source)
+    from publication import load
+
+    selected_map = inherited_file_map
+    if selected_map is None:
+        selected_map = json.loads(relative_file(source, "publication.json").read_text())["file_map"]
+    inherited, _ = load(source, file_map=selected_map)
+    owned = {c["id"] for c in inherited["protocol"]["configurations"]}
+    if inherited["cases"] != cases:
+        raise ValueError("Published frozen inputs changed")
+    if owned & {c["id"] for c in atlas.MEASURED_CONFIGURATIONS}:
+        raise ValueError(
+            "Inherited source already owns the measured configuration; "
+            "specify another sealed FileMap"
+        )
     versions = preflight()
     into.mkdir(parents=True, exist_ok=True)
     identifier = f"{atlas.SUITE}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid4()}"
@@ -123,13 +137,7 @@ def create(into, *, prepare_only=False):
     shutil.copyfile(source / "data/manifest.json", root / "data/manifest.json")
     for case in cases:
         shutil.copyfile(source / case["path"], root / case["path"])
-    from publication import load
-
-    inherited, _ = load(source)
-    if inherited["cases"] != cases or len(inherited["results"]) != 864:
-        raise ValueError("Published frozen inputs or cohort changed")
-    selector = json.loads(relative_file(source, "publication.json").read_text())
-    mapping = json.loads(relative_file(source, selector["file_map"]).read_text())
+    mapping = json.loads(relative_file(source, selected_map).read_text())
     for name, physical in mapping.items():
         old = relative_file(source, physical)
         destinations = [root / "history/pilot-v0.5" / name]
@@ -165,7 +173,7 @@ def create(into, *, prepare_only=False):
         "suite": atlas.SUITE,
         "measurement_suite": atlas.MEASUREMENT_SUITE,
         "worker_timeout_seconds": atlas.WORKER_TIMEOUT_SECONDS,
-        "configurations": atlas.CONFIGURATIONS,
+        "configurations": inherited["protocol"]["configurations"] + atlas.MEASURED_CONFIGURATIONS,
         "measurement_configurations": atlas.MEASURED_CONFIGURATIONS,
         "measured_entries": len(cases) * len(atlas.MEASURED_CONFIGURATIONS) * 2 * len(atlas.SEEDS),
         "seeds": atlas.SEEDS,
@@ -200,13 +208,18 @@ def validate_workspace(root):
 
     root = Path(root).resolve()
     spec = json.loads(relative_file(root, "campaign.json").read_text())
+    predecessor_name = "history/pilot-v0.5/campaign.json"
+    predecessor_path = relative_file(root, predecessor_name)
+    if digest(predecessor_path) != spec["files"][predecessor_name]:
+        raise ValueError("Campaign predecessor specification changed")
+    predecessor = json.loads(predecessor_path.read_text())
     if (
         spec.get("spec_format_version") != 2
         or spec["suite"] != atlas.SUITE
         or spec["measurement_suite"] != atlas.MEASUREMENT_SUITE
         or spec["measurement_configurations"] != atlas.MEASURED_CONFIGURATIONS
         or spec["worker_timeout_seconds"] != atlas.WORKER_TIMEOUT_SECONDS
-        or spec["configurations"] != atlas.CONFIGURATIONS
+        or spec["configurations"] != predecessor["configurations"] + atlas.MEASURED_CONFIGURATIONS
         or spec["seeds"] != atlas.SEEDS
         or spec["timing_repeats"] != atlas.REPEATS
         or spec["campaign_id"] != root.name

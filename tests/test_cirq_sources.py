@@ -3,6 +3,7 @@ import os
 import subprocess
 
 import pytest
+from publication_fixtures import qmap_publication_map
 
 import atlas
 import campaign
@@ -25,7 +26,9 @@ def test_explicit_budget_does_not_evaluate_missing_fallback():
 
 
 def test_unknown_workspace_format_rejected(tmp_path):
-    root = campaign.create(tmp_path, prepare_only=True)
+    root = campaign.create(
+        tmp_path, prepare_only=True, inherited_file_map=qmap_publication_map(atlas.ROOT)
+    )
     spec = json.loads((root / "campaign.json").read_text())
     spec["spec_format_version"] = 99
     (root / "campaign.json").write_text(json.dumps(spec))

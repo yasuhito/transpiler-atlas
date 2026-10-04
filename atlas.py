@@ -810,11 +810,16 @@ def main() -> None:
     parser.add_argument("--into", type=Path)
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument(
+        "--inherit-file-map", help="Explicit repository-relative sealed source FileMap"
+    )
+    parser.add_argument(
         "--artifact-root", type=Path, help="Diagnostic outputs only, never campaign data"
     )
     options = parser.parse_args()
-    if options.action != "campaign" and (options.into is not None or options.prepare_only):
-        parser.error("--into and --prepare-only require campaign")
+    if options.action != "campaign" and (
+        options.into is not None or options.prepare_only or options.inherit_file_map is not None
+    ):
+        parser.error("--into, --prepare-only and --inherit-file-map require campaign")
     if options.action != "worker" and (options.args or options.artifact_root is not None):
         parser.error("Worker arguments and --artifact-root require worker")
     if options.action == "campaign" and (options.overwrite or options.resume_log is not None):
@@ -824,7 +829,13 @@ def main() -> None:
 
         if options.into is None:
             parser.error("campaign requires --into")
-        print(create(options.into, prepare_only=options.prepare_only))
+        print(
+            create(
+                options.into,
+                prepare_only=options.prepare_only,
+                inherited_file_map=options.inherit_file_map,
+            )
+        )
     elif options.action == "run":
         run_pilot(overwrite=options.overwrite, resume_log=options.resume_log)
     else:

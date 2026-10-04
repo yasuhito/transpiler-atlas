@@ -60,11 +60,18 @@ group on timeout. Numerical acceptance is not an unconditional mathematical proo
 
 ```sh
 uv sync --frozen
-uv run --frozen python atlas.py campaign --into /tmp/ta-cirq/campaigns --prepare-only
+uv run --frozen python atlas.py campaign --into /tmp/ta-cirq/campaigns --prepare-only \
+  --inherit-file-map 'data/campaigns/<sealed-predecessor>/file-map.json'
 # A prepared workspace may be measured once with the same interpreter:
 /path/to/cirq-checkout/.venv/bin/python /path/to/workspace/atlas.py run
 /path/to/cirq-checkout/.venv/bin/python /path/to/workspace/build_site.py
 ```
+
+The predecessor FileMap is selected explicitly and authenticated independently of
+`publication.json`. After Cirq publication, select the original QMAP predecessor,
+not the current selector that already owns Cirq. Overlapping ownership is rejected
+before a workspace is reserved. Expected configurations and entry counts derive
+from the predecessor's sealed specification, not fixed totals in the runner.
 
 Only this configuration is scheduled: 12 frozen cases, two targets and three
 slots, giving 72 workers and up to 216 output checks. Do not run pytest or another

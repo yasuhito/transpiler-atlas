@@ -15,15 +15,21 @@ try {
   await page.goto(pathToFileURL(path.resolve('index.html')).href);
   const data = JSON.parse(await page.locator('#benchmark-data').textContent());
   assert.equal(data.campaign_id, config.campaign_id);
-  assert.equal(data.results.length, 864);
-  assert.equal(await page.locator('#result-rows tr').count(), 12);
+  assert.equal(data.results.length, raw.results.length);
+  assert.equal(data.results.length, raw.cases.length * raw.protocol.configurations.length * 2 * raw.protocol.seeds.length);
+  assert.equal(await page.locator('#result-rows tr').count(), raw.protocol.configurations.length);
   assert.equal(await page.getByRole('link', { name: 'Raw JSON', exact: true }).getAttribute('href'), mapping['data/results.json']);
   assert.equal(await page.getByRole('link', { name: 'v0.4 Raw JSON (reused source)', exact: true }).getAttribute('href'), 'data/results.json');
-  assert.match(await page.locator('#budget-note').innerText(), /New pilot-qmap-v1-420s: 420 s per worker/);
+  for (const source of Object.values(raw.protocol.measurement_sources)) {
+    assert.ok((await page.locator('#budget-note').innerText()).includes(`${source.kind === 'new' ? 'New' : 'Reused'} ${source.suite}:`));
+  }
+  if (raw.protocol.configuration_sources['cirq-routecqc-maponly-v1']) {
+    assert.match(await page.locator('[data-compiler="cirq-routecqc-maponly-v1"] .budget-provenance').innerText(), /New Cirq measurement: 420 s/);
+  }
   assert.match(await page.locator('#budget-note').innerText(), /This is not a matched-budget rerun/);
   assert.match(await page.locator('[data-compiler="qiskit-l2"] .budget-provenance').innerText(), /initial 120 s; timeout-only retries 600 s/);
   assert.match(await page.locator('[data-compiler="qmap-sc-heuristic-maponly-v1"] .budget-provenance').innerText(), /420 s/);
-  assert.equal(raw.results.filter(r => r.compiler === 'qmap').length, 72);
+  assert.equal(raw.results.filter(r => r.compiler === 'qmap').length, raw.protocol.measurement_sources.qmap420.records);
   assert.deepEqual(errors, []);
-  console.log('Publication root: sealed 864 records, QMAP row, mixed budgets, both raw links and no browser errors passed.');
+  console.log(`Publication root: sealed ${raw.results.length} records, ${raw.protocol.configurations.length} configurations, source budgets, both raw links and no browser errors passed.`);
 } finally { await browser.close(); }

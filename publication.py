@@ -6,16 +6,23 @@ from pathlib import Path
 from campaign import relative_file, validate_completed
 
 
-def load(root):
+def load(root, *, file_map=None):
+    """Read the current selector, or an explicitly selected immutable FileMap."""
     root = Path(root)
-    config = json.loads(relative_file(root, "publication.json").read_text())
-    mapping = json.loads(relative_file(root, config["file_map"]).read_text())
+    config = (
+        json.loads(relative_file(root, "publication.json").read_text())
+        if file_map is None
+        else None
+    )
+    mapping = json.loads(
+        relative_file(root, config["file_map"] if config else file_map).read_text()
+    )
 
     def resolve(name):
         return relative_file(root, mapping[name])
 
     snapshot = validate_completed(root, resolve)
-    if snapshot["campaign_id"] != config["campaign_id"]:
+    if config is not None and snapshot["campaign_id"] != config["campaign_id"]:
         raise ValueError("Publication campaign identity mismatch")
     expected = set(snapshot["files"]) | {"MEASUREMENT_COMPLETE", "snapshot-manifest.json"}
     if set(mapping) != expected:

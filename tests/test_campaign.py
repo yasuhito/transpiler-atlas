@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import pytest
+from publication_fixtures import qmap_publication_map
 
 import atlas
 import build_site
@@ -13,7 +14,11 @@ import campaign
 
 @pytest.fixture
 def workspace(tmp_path):
-    return campaign.create(tmp_path / "campaigns", prepare_only=True)
+    return campaign.create(
+        tmp_path / "campaigns",
+        prepare_only=True,
+        inherited_file_map=qmap_publication_map(atlas.ROOT),
+    )
 
 
 def synthetic_document(root):
@@ -71,7 +76,13 @@ def synthetic_document(root):
 def test_prepare_create_only_and_fixed_spec(workspace):
     spec = campaign.validate_workspace(workspace)
     assert spec["suite"] == atlas.SUITE
-    assert len(spec["configurations"]) == 13
+    from publication import load
+
+    inherited, _ = load(atlas.ROOT, file_map=qmap_publication_map(atlas.ROOT))
+    assert (
+        spec["configurations"]
+        == inherited["protocol"]["configurations"] + atlas.MEASURED_CONFIGURATIONS
+    )
     assert len(spec["measurement_configurations"]) == 1
     assert spec["measured_entries"] == 72
     assert spec["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS == 420
@@ -99,7 +110,10 @@ def test_seal_rebuild_hash_and_closed_links(workspace, monkeypatch):
     assert snapshot["worker_timeout_seconds"] == atlas.WORKER_TIMEOUT_SECONDS
     assert snapshot["seal_format_version"] == 2
     assert snapshot["measured_entries"] == 72
-    assert snapshot["reused_entries"] == 864
+    from publication import load
+
+    inherited, _ = load(atlas.ROOT, file_map=qmap_publication_map(atlas.ROOT))
+    assert snapshot["reused_entries"] == len(inherited["results"])
     raw = (workspace / "data/results.json").read_bytes()
     with pytest.raises(FileExistsError):
         campaign.finish(workspace, doc)

@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 
 const raw = siteData();
 const count = raw.protocol.configurations.length;
-assert.equal(count, 12);
+assert.equal(new Set(raw.protocol.configurations.map(c => c.id)).size, count);
 assert.equal(raw.protocol.reference_configuration, 'qiskit-l2');
 assert.equal(raw.results.length, raw.cases.length * count * 2 * raw.protocol.seeds.length);
 assert.equal(new Set(raw.results.map(r => [r.case_id, r.target, r.configuration_id, r.seed].join(':'))).size, raw.results.length);
@@ -27,8 +27,8 @@ try {
   const url = pathToFileURL(path.resolve('index.html')).href;
   await page.goto(url);
   assert.equal(await page.locator('#result-rows tr').count(), count);
-  assert.equal(await page.locator('#suite-version').innerText(), 'Pilot v0.5-qmap-mixed-budgets');
-  assert.match(await page.locator('#dataset-meta').innerText(), /4 SDKs · 12 configurations/);
+  assert.equal(await page.locator('#suite-version').innerText(), raw.suite.replace('pilot-v', 'Pilot v'));
+  assert.ok((await page.locator('#dataset-meta').innerText()).includes(`${new Set(raw.protocol.configurations.map(c => c.compiler)).size} SDKs · ${count} configurations`));
   const ref = () => page.locator('#result-rows tr[data-compiler="qiskit-l2"] .score-value').first();
   assert.equal(await ref().innerText(), '100.0');
   const annotated = ['bqskit-l2', 'bqskit-l3', 'bqskit-l4'];
@@ -138,5 +138,5 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: '/tmp/transpiler-atlas-configurations-mobile.png', fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('Configuration checks passed: 12 mixed-source entries, distinct artifacts, SDK/effort filtering, fixed reference, permalinks, all views, mobile.');
+  console.log(`Configuration checks passed: ${count} mixed-source entries, distinct artifacts, SDK/effort filtering, fixed reference, permalinks, all views, mobile.`);
 } finally { await browser.close(); }
