@@ -2,6 +2,7 @@
 
 const data = JSON.parse(document.getElementById('benchmark-data').textContent);
 const scoreVersion = data.score_version;
+const retained = data.kind === 'compile-retention';
 const $ = id => document.getElementById(id);
 const median = values => {
   const xs = [...values].sort((a, b) => a - b);
@@ -19,6 +20,7 @@ const sdkVersion = sdk => {
 };
 function budgetDescription(source) {
   const p = source.protocol;
+  if (p.kind === 'compile-retention') return `${p.worker_timeout_seconds} s whole job; compile first, then fresh QCEC checks capped at min(${p.verification_hard_timeout_seconds} s, remaining job time), cooperative timeout 20 s. Cleanup separately recorded. Shared-host diagnostics, not performance comparisons.`;
   if (p.timeout_retry_entries) return `Initially ${p.initial_worker_timeout_seconds} s per worker; only ${p.timeout_retry_entries} initial timeouts retried at ${p.worker_timeout_seconds} s. ${source.records - p.timeout_retry_entries} initial outcomes retained. Initial attempt snapshot: ${p.initial_attempt_snapshot}. Per-record previous_attempts and worker_timeout_seconds preserve actual provenance.`;
   return `${p.worker_timeout_seconds} s per worker, including three compilations, strict checks and startup/shutdown; not per compilation.`;
 }
@@ -64,11 +66,13 @@ const metrics = {
   depth: { name: '2Q depth', higher: false, unit: 'layers' },
   time: { name: 'Compile time', higher: false, unit: 'ms' },
 };
-const defaults = { view: 'leaderboard', target: 'line', family: 'all', width: 'all', compiler: 'all', configuration: 'all', metric: 'quality', columns: 'on', y: 'count' };
+const plannedTargets = retained ? [...new Set(data.protocol.ordered_schedule.map(j => j.target))].sort() : ['line', 'all-to-all'];
+if (retained) $('target').innerHTML = plannedTargets.map(t => `<option value="${esc(t)}">${t === 'line' ? 'Line' : 'All-to-all'}</option>`).join('');
+const defaults = { view: 'leaderboard', target: plannedTargets.includes('line') ? 'line' : plannedTargets[0], family: 'all', width: 'all', compiler: 'all', configuration: 'all', metric: 'quality', columns: 'on', y: 'count' };
 const state = { ...defaults };
 const enums = {
   view: ['leaderboard', 'circuits', 'matrix', 'tradeoff'],
-  target: ['line', 'all-to-all'], family: ['all', ...new Set(data.cases.map(c => c.family))],
+  target: plannedTargets, family: ['all', ...new Set(data.cases.map(c => c.family))],
   width: ['all', ...new Set(data.cases.map(c => String(c.qubits)))], compiler: ['all', ...sdkIds], configuration: ['all', ...compilerIds],
   metric: Object.keys(metrics), columns: ['on', 'off'], y: ['count', 'depth'],
 };
@@ -114,23 +118,29 @@ function measuredMedian(values) {
 }
 function trialPassed(row) {
   return row.status === 'passed' && row.trials?.length === data.protocol.timing_repeats
-    && row.trials.every(t => t.validation.accepted);
+    && row.trials.every(t => t.validation?.accepted);
 }
 function aggregate(cases) {
   return cases.flatMap(circuit => compilerIds.map(compiler => {
     const matching = data.results.filter(r => r.target === state.target && r.case_id === circuit.id && (r.configuration_id ?? r.compiler) === compiler);
     // Count each scheduled seed slot once; ambiguous duplicates are not accepted.
-    const expected = [...data.protocol.seeds].sort((a, b) => a - b);
+    const expected = retained
+      ? data.protocol.ordered_schedule.filter(j => j.case_id === circuit.id && j.configuration_id === compiler && j.target === state.target).map(j => j.seed).sort((a, b) => a - b)
+      : [...data.protocol.seeds].sort((a, b) => a - b);
+    if (retained && !expected.length) return null;
     const rows = expected.flatMap(seed => {
       const matches = matching.filter(r => r.seed === seed);
       return matches.length === 1 ? matches : [];
     });
     const seeds = rows.map(r => r.seed).sort((a, b) => a - b);
     const measuredRows = rows.filter(r => [r.metrics?.two_qubit_count, r.metrics?.two_qubit_depth, r.compile_ms].every(Number.isFinite));
-    const measurementComplete = JSON.stringify(seeds) === JSON.stringify(expected) && measuredRows.length === expected.length;
+    const measurementComplete = JSON.stringify(seeds) === JSON.stringify(expected) && measuredRows.length === expected.length
+      && (!retained || rows.every(r => r.coverage?.compiled === data.protocol.timing_repeats));
     const passed = rows.filter(trialPassed).length;
     const complete = measurementComplete && passed === expected.length;
-    const rulesMet = measurementComplete && rows.every(r => ['passed', 'verification_failed'].includes(r.status));
+    const rulesMet = retained
+      ? rows.some(r => r.trials?.length) && rows.every(r => (r.trials ?? []).every(t => t.output_rules === 'valid'))
+      : measurementComplete && rows.every(r => ['passed', 'verification_failed'].includes(r.status));
     return {
       id: circuit.id, family: circuit.family, qubits: circuit.qubits, compiler, complete, rows,
       measured: measuredRows.length, required: expected.length, measurementComplete, passed, rulesMet,
@@ -140,7 +150,7 @@ function aggregate(cases) {
       one: measuredMedian(rows.map(r => r.metrics?.one_qubit_count)),
       total: measuredMedian(rows.map(r => r.metrics?.total_depth)),
     };
-  }));
+  })).filter(Boolean);
 }
 function scoreCases(items) {
   for (const row of items) {
@@ -151,7 +161,7 @@ function scoreCases(items) {
       ? 100 * Math.max(ref.time, 1) / Math.max(row.time, 1) : null;
     row.passSlots = row.passed;
     row.requiredSlots = row.required;
-    row.validationRate = row.passSlots / row.requiredSlots;
+    row.validationRate = row.requiredSlots ? row.passSlots / row.requiredSlots : 0;
     row.quality = row.rawQuality === null ? null : row.rawQuality * row.validationRate;
     row.speed = row.rawSpeed === null ? null : row.rawSpeed * row.validationRate;
   }
@@ -258,7 +268,14 @@ function inputDetails(id) {
 function validationDetails(row) {
   if (row.complete) return '';
   const slots = row.rows.map(r => {
-    const criteria = (r.trials ?? []).map(t => t.validation.criterion).join(', ');
+    if (retained) {
+      const coverage = r.coverage ?? { compiled: r.trials?.length ?? 0, required_repeats: data.protocol.timing_repeats };
+      const checks = (r.trials ?? []).map(t => `<div>Repeat ${t.repeat}: ${esc(t.verification.state)}; ${esc(t.validation?.criterion ?? t.verification.reason ?? 'not checked')}; ${t.verification.wall_seconds.toFixed(3)} s / ${t.verification.effective_budget_seconds.toFixed(3)} s cap · <a href="${esc(t.artifact)}">QASM</a> · <a href="${esc(t.qpy_artifact)}">Native QPY</a> · <a href="${esc(t.compile_manifest)}">Compile manifest</a></div>`).join('');
+      const missing = (r.missing_trials ?? []).map(t => `<div>Repeat ${t.repeat}: compile missing; ${esc(t.reason)}</div>`).join('');
+      const fault = r.fault ? `<div>${esc(r.fault)} · <a href="${esc(r.terminal_facts.replace(/result\.json$/, 'compile.stderr.log'))}">Compile error log</a></div>` : '';
+      return `<div>Seed slot ${r.seed}: ${esc(r.status)}; compiled ${coverage.compiled}/${coverage.required_repeats} repeats</div>${fault}${checks}${missing}`;
+    }
+    const criteria = (r.trials ?? []).map(t => t.validation?.criterion).join(', ');
     const description = [r.status === 'timeout' ? r.error : '', criteria].filter(Boolean).join('; ');
     const missing = timeoutOnly({ rows: [r], required: 1 }) ? 'Not verified; no completed measurement.' : '';
     return `<div>Seed slot ${r.seed}: ${esc(r.status)}; ${esc(description + (missing ? (description ? '. ' : '') + missing : ''))}</div>`;
@@ -267,10 +284,20 @@ function validationDetails(row) {
 }
 function equivalenceLabel(row) {
   if (row.complete) return 'QCEC passed';
-  if (row.rows.some(r => r.status === 'verification_failed' || r.trials?.some(t => !t.validation.accepted))) return 'Strict check failed';
+  if (retained) {
+    if (row.rows.some(r => r.status === 'error')) return 'Execution/check error';
+    if (row.rows.some(r => r.status === 'compile_incomplete')) return 'Compilation incomplete';
+    if (row.rows.some(r => r.status === 'not_equivalent')) return 'Explicitly not equivalent';
+    return 'Verification incomplete';
+  }
+  if (row.rows.some(r => r.status === 'verification_failed' || r.trials?.some(t => !t.validation?.accepted))) return 'Strict check failed';
   return timeoutOnly(row) ? 'Not verified' : 'Incomplete checks';
 }
 function outputRules(row) {
+  if (retained) {
+    const compiled = row.rows.reduce((n, r) => n + (r.coverage?.compiled ?? r.trials?.length ?? 0), 0);
+    return `<span class="${row.rulesMet ? 'valid' : 'artifact'}">${row.rulesMet ? 'Saved output rules met' : 'Output rules not fully checked'}</span><span class="cell-sub">Compiled ${compiled}/${row.required * data.protocol.timing_repeats} repeats</span>`;
+  }
   return `<span class="${row.rulesMet ? 'valid' : 'artifact'}">${row.rulesMet ? 'Output rules met' : 'Output rules not fully checked'}</span><span class="cell-sub">${timeoutOnly(row) ? 'No measurement · ' : ''}Measured ${row.measured}/${row.required} slots</span>${!row.measurementComplete && row.measured ? '<span class="cell-sub measurement-warning">Partial measurements</span>' : ''}`;
 }
 function renderCircuits(items) {
@@ -281,6 +308,10 @@ function renderCircuits(items) {
     const artifact = row.rows.flatMap(r => r.trials ?? []).find(t => t.artifact)?.artifact;
     return `<tr data-compiler="${row.compiler}"><td><strong class="mono">${esc(row.id)}</strong><span class="sub" style="margin-left:0">${esc(row.family)} · ${row.qubits} qubits</span>${inputDetails(row.id)}</td><td>${nameCell(row.compiler, detailed)}</td>${scoreColumn ? numberCell(row, state.metric) : ''}${['count', 'depth', 'time'].map(k => numberCell(row, k)).join('')}${detailed ? numberCell(row, 'one') + numberCell(row, 'total') : ''}<td>${outputRules(row)}</td><td><span class="${row.complete ? 'valid' : 'measurement-warning'}">${equivalenceLabel(row)}</span><span class="cell-sub">QCEC ${row.passed}/${row.required} slots</span>${validationDetails(row)}${artifact ? ' · <a class="artifact" href="' + esc(artifact) + '">QASM ↗</a>' : ''}</td></tr>`;
   }).join('');
+  if (retained) {
+    $('view-note').textContent = 'Standalone diagnostic, not a historical backfill. Raw medians use committed repeats with coverage, regardless of verification. Output rules are independent of equivalence. An unfinished check is not an explicit mismatch. QASM, native QPY and compile manifests remain available for saved unverified outputs. Unfinished slots stay in the pass-rate denominator; N/A means necessary raw or reference values are missing. Shared-host compile times are diagnostic, not performance comparisons.';
+    return;
+  }
   $('view-note').textContent = 'Raw medians include every measured seed slot, regardless of strict equivalence results. Missing slots are excluded from raw medians and labeled partial. Output rules check gates, connections, and width, separately from equivalence. Quality and Speed include a QCEC pass-rate penalty, marked with *. The approx. tag describes numerical synthesis and does not replace the individual QCEC result. N/A means required raw measurements or reference values are unavailable. Timed-out workers are not verified and have no completed measurements. Hover over time for the sample range. QASM opens the first recorded output.';
 }
 function renderMatrix(items, cases, compilers) {
@@ -402,21 +433,23 @@ window.addEventListener('hashchange', () => { readHash(); render(); });
 window.addEventListener('resize', () => { if (state.view === 'tradeoff') render(); });
 
 const trials = data.results.flatMap(r => r.trials ?? []);
-const accepted = trials.filter(t => t.validation.accepted).length;
+const accepted = trials.filter(t => t.validation?.accepted).length;
 $('suite-version').textContent = data.suite.replace('pilot-v', 'Pilot v');
 $('score-version').textContent = 'Scores: ' + scoreVersion;
 $('updated').textContent = (data.protocol.measurement_sources ? 'Combined ' : 'Measured ') + (data.updated_at ?? data.created_at).slice(0, 10);
 if ($('budget-note')) $('budget-note').textContent = data.protocol.measurement_sources
   ? `Mixed budgets and measurement windows. ${Object.values(data.protocol.measurement_sources).map(source => `${source.kind === 'new' ? 'New' : 'Reused'} ${source.suite}: ${budgetDescription(source)}`).join(' ')} Qiskit L2 is the reused v0.4 reference. This is not a matched-budget rerun.`
   : budgetDescription({ protocol: data.protocol, records: data.results.length });
-$('dataset-meta').textContent = `${data.cases.length} circuits · ${sdkIds.length} SDKs · ${compilerIds.length} configurations · 2 topologies · ${accepted}/${trials.length} QCEC checks passed`;
+$('dataset-meta').textContent = `${data.cases.length} circuits · ${sdkIds.length} SDKs · ${compilerIds.length} configurations · ${retained ? `${plannedTargets.length} ${plannedTargets.length === 1 ? 'topology' : 'topologies'}` : '2 topologies'} · ${accepted}/${retained ? data.protocol.ordered_schedule.length * data.protocol.timing_repeats : trials.length} QCEC checks passed` + (retained ? ` · ${trials.length} compiled repeats saved` : '');
 $('footer-meta').textContent = `${data.suite} · rz / sx / x / cx · ${data.environment.python ? 'Python ' + data.environment.python : ''}`;
+if (retained && $('reference-interpretation')) $('reference-interpretation').textContent = 'Partial-raw v2 uses committed-repeat medians with coverage. Quality and Speed require their necessary raw values and measured Qiskit L2 reference rows in this standalone dataset; historical reference rows are never borrowed. Missing references make adjusted scores N/A, not raw metrics. Unfinished verification alone yields a zero pass-rate factor, not N/A.';
 const env = data.environment;
 const fields = [
   ['CPU', env.cpu], ['Affinity', env.cpu_affinity.join(', ')], ['OS', env.platform],
   ...(data.campaign_id ? [['Campaign', data.campaign_id]] : []),
-  ['Versions', Object.entries(env.versions).map(([k, v]) => k + ' ' + v).join(' · ')],
-  ['Qiskit', data.protocol.qiskit_pipeline], ['pytket', Array.isArray(data.protocol.pytket_pipeline) ? data.protocol.pytket_pipeline.join(' → ') : JSON.stringify(data.protocol.pytket_pipeline)],
+  ['Versions', Object.entries(env.versions).filter(([k]) => !retained || ['python', 'qiskit', 'pytket', 'pytket-qiskit', 'bqskit', 'mqt-qcec', 'mqt-qmap', 'mqt-core', 'cirq', 'cirq-core', 'numpy', 'scipy', 'networkx'].includes(k.toLowerCase().replace(/[._]/g, '-'))).map(([k, v]) => k + ' ' + v).join(' · ') + (retained ? ' · Full resolved inventory: raw data' : '')],
+  ...(!retained || sdkIds.includes('qiskit') ? [['Qiskit', data.protocol.qiskit_pipeline]] : []),
+  ...(data.protocol.pytket_pipeline ? [['pytket', Array.isArray(data.protocol.pytket_pipeline) ? data.protocol.pytket_pipeline.join(' → ') : JSON.stringify(data.protocol.pytket_pipeline)]] : []),
   ...(data.protocol.bqskit_pipeline ? [['BQSKit', JSON.stringify(data.protocol.bqskit_pipeline)]] : []),
   ...(data.protocol.qmap_pipeline ? [['MQT QMAP', JSON.stringify(data.protocol.qmap_pipeline)], ['QMAP seed', data.protocol.qmap_seed_note], ['QMAP timer', 'Includes required MQT-to-Qiskit conversion and native basis lowering; no Qiskit optimization or routing.']] : []),
   ...(data.protocol.cirq_pipeline ? [['Cirq', JSON.stringify(data.protocol.cirq_pipeline)], ['Cirq seed', data.protocol.cirq_seed_note], ['Cirq timer', 'Includes routing, QASM bridge and native basis lowering; no numerical target optimizer.']] : []),

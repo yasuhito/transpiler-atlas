@@ -2,7 +2,7 @@
   "name": "transpiler-atlas-ui-tests",
   "private": true,
   "scripts": {
-    "test": "node tests/browser.mjs && node tests/theme.mjs && node tests/measurement-visibility.mjs && node tests/scoring.mjs && node tests/configurations.mjs"
+    "test": "node tests/browser.mjs && node tests/theme.mjs && node tests/measurement-visibility.mjs && node tests/scoring.mjs && node tests/configurations.mjs && node tests/retention-site.mjs"
   },
   "devDependencies": {
     "playwright": "1.58.2"
