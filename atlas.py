@@ -203,21 +203,27 @@ def validation_copy(circuit, initial: list[int], final: list[int]):
     return checked
 
 
+STRICT_CHECKER_OPTIONS = {
+    "run_simulation_checker": False,
+    "run_zx_checker": False,
+    "parallel": False,
+    "nthreads": 1,
+    "timeout": 20,
+}
+
+
+def strict_pair(original, native, initial: list[int], final: list[int]):
+    """Prepare the unchanged strict native/map/phase verification inputs."""
+    before = original.copy()
+    before.measure_all()
+    return before, validation_copy(native, initial, final)
+
+
 def check_equivalence(original, native, initial: list[int], final: list[int]) -> dict:
     from mqt import qcec
 
-    before = original.copy()
-    before.measure_all()
-    after = validation_copy(native, initial, final)
-    result = qcec.verify(
-        before,
-        after,
-        run_simulation_checker=False,
-        run_zx_checker=False,
-        parallel=False,
-        nthreads=1,
-        timeout=20,
-    )
+    before, after = strict_pair(original, native, initial, final)
+    result = qcec.verify(before, after, **STRICT_CHECKER_OPTIONS)
     details = result.json()
     if isinstance(details, str):
         details = json.loads(details)

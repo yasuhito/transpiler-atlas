@@ -19,7 +19,7 @@ def test_locked_qcec_criterion_table():
 
     from mqt.qcec.pyqcec import EquivalenceCriterion
 
-    assert importlib.metadata.version("mqt.qcec") == "3.10.1"
+    assert importlib.metadata.version("mqt.qcec") == "3.10.2"
     assert set(EquivalenceCriterion.__members__) == set(h.CRITERIA)
 
 

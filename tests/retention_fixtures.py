@@ -34,6 +34,8 @@ def simulate(root, spec, monkeypatch, mode="timeout"):
 
     def event(path, name, **fields):
         real_event(path, name, **fields)
+        if mode == "start_receipt_cutoff" and name == "verification_start":
+            clock[0] += 60  # Start-receipt/timeline fsync consumes this check's cap.
         if mode == "compile_partial" and name == "compile_start" and fields["repeat"] == 2:
             raise CompileCutoff()
         if mode == "save_failure" and name == "compile_committed" and fields["repeat"] == 0:
@@ -42,7 +44,13 @@ def simulate(root, spec, monkeypatch, mode="timeout"):
     def supervise(command, directory, name, deadline, env=None):
         before = clock[0]
         if before >= deadline:
-            result = {"state": "not_started", "wall_seconds": 0, "reason": "job_budget"}
+            result = {
+                "state": "not_started",
+                "wall_seconds": 0,
+                "reason": "deadline",
+                "observed_monotonic": before,
+                "deadline_monotonic": deadline,
+            }
             h._json(directory / f"{name}.process.json", result)
             return result
         spawned.append((name, deadline - before))
@@ -80,19 +88,34 @@ def simulate(root, spec, monkeypatch, mode="timeout"):
                     "early_reply": "equivalent",
                     "invalid_clock": "equivalent",
                     "mixed": ["not_equivalent", "no_information", "equivalent"][repeat],
+                    "api_timeout": None,
+                    "api_budget": None,
                 }
                 criterion = criteria.get(mode)
                 if mode in criteria:
-                    clock[0] += 1
+                    clock[0] += 59 if mode == "api_timeout" else 59.5 if mode == "api_budget" else 1
+                    called = clock[0] if mode == "api_budget" else before
                     h._json(
                         directory / f"r{repeat}.reply.json",
                         {
                             "compile_manifest_sha256": h._digest(
                                 directory / f"r{repeat}.compile.json"
                             ),
-                            "validation": {
+                            "verification_start_sha256": h._digest(
+                                directory / f"r{repeat}.verification-start.json"
+                            ),
+                            "outcome": {
+                                "api_timeout": "qcec_hard_timeout",
+                                "api_budget": "check_budget",
+                            }.get(mode, "returned"),
+                            "called_monotonic_ns": int(called * 1e9),
+                            "inner_seconds": deadline - called - 1,
+                            "validation": None
+                            if mode in {"api_timeout", "api_budget"}
+                            else {
                                 "accepted": criterion == "equivalent" and mode != "bad_acceptance",
                                 "criterion": criterion,
+                                "details": {"equivalence": criterion},
                             },
                             "returned_wall_ns": time.time_ns(),
                             "returned_monotonic_ns": False

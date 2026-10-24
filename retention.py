@@ -50,6 +50,43 @@ CRITERIA = {
 
 
 @dataclass(frozen=True)
+class Suite:
+    """Closed historical/current identity; only CURRENT may create new evidence."""
+
+    name: str
+    protocol_version: int
+    qcec_version: str
+    verifier: str | None
+
+    def policy(self) -> dict:
+        result = {
+            "repeats": REPEATS,
+            "whole_job_seconds": JOB_SECONDS,
+            "check_hard_seconds": CHECK_SECONDS,
+            "qcec_cooperative_seconds": 20,
+            "order": "compile-all-then-verify",
+            "deadline_policy": "observed-exit-before-cutoff",
+            "transport": "native-QPY",
+            "kind": "compile-retention",
+            "protocol_version": self.protocol_version,
+        }
+        if self.verifier is not None:
+            result.update(verifier=self.verifier, receipt_reserve_seconds=1)
+        return result
+
+
+V1 = Suite("pilot-compile-retention-v1-420s-check60", 1, "3.10.1", None)
+V2 = Suite(
+    "pilot-compile-retention-v2-qcec3102-420s-check60",
+    2,
+    "3.10.2",
+    "mqt.qcec.verify_with_hard_timeout",
+)
+CURRENT = V2
+SUITES = {suite.name: suite for suite in (V1, V2)}
+
+
+@dataclass(frozen=True)
 class Job:
     case_id: str
     configuration_id: str
@@ -331,13 +368,18 @@ def _compile_child(directory: Path) -> None:
 
 
 def _check_child(directory: Path, repeat: int) -> None:
+    from mqt import qcec
     from qiskit import qasm2
 
     import atlas
 
+    if _spec(directory)["protocol"] != CURRENT.policy():
+        raise ValueError("Only the current retention suite is executable")
+    start = json.loads((directory / f"r{repeat}.verification-start.json").read_text())
     native, record = _native(directory, repeat)
     _, source = _case(Job(**record["job"]))
     original = qasm2.loads(source.read_text())
+    before, after = atlas.strict_pair(original, native, record["initial_map"], record["final_map"])
     _json(
         directory / f"r{repeat}.check-entered.json",
         {
@@ -346,12 +388,37 @@ def _check_child(directory: Path, repeat: int) -> None:
             "compile_manifest_sha256": _digest(directory / f"r{repeat}.compile.json"),
         },
     )
-    result = atlas.check_equivalence(original, native, record["initial_map"], record["final_map"])
+    called_ns = time.monotonic_ns()
+    inner_seconds = (
+        start["check_deadline_monotonic"]
+        - called_ns / 1e9
+        - CURRENT.policy()["receipt_reserve_seconds"]
+    )
+    outcome, validation = "check_budget", None
+    if inner_seconds > 0:
+        try:
+            details = qcec.verify_with_hard_timeout(
+                before, after, deadline=inner_seconds, **atlas.STRICT_CHECKER_OPTIONS
+            )
+        except TimeoutError:
+            outcome = "qcec_hard_timeout"
+        else:
+            criterion = details["equivalence"]
+            validation = {
+                "accepted": type(criterion) is str and _classification(criterion) == "passed",
+                "criterion": criterion,
+                "details": details,
+            }
+            outcome = "returned"
     _json(
         directory / f"r{repeat}.reply.json",
         {
             "compile_manifest_sha256": _digest(directory / f"r{repeat}.compile.json"),
-            "validation": result,
+            "verification_start_sha256": _digest(directory / f"r{repeat}.verification-start.json"),
+            "outcome": outcome,
+            "called_monotonic_ns": called_ns,
+            "inner_seconds": inner_seconds,
+            "validation": validation,
             "returned_wall_ns": time.time_ns(),
             "returned_monotonic_ns": time.monotonic_ns(),
         },
@@ -423,7 +490,13 @@ def _supervise(
     """One direct group, no pipe transport; keep root unreaped until group kill."""
     started = time.monotonic()
     if started >= deadline:
-        result = {"state": "not_started", "wall_seconds": 0, "reason": "job_budget"}
+        result = {
+            "state": "not_started",
+            "wall_seconds": 0,
+            "reason": "deadline",
+            "observed_monotonic": started,
+            "deadline_monotonic": deadline,
+        }
         _json(directory / f"{name}.process.json", result)
         return result
     _subreaper()
@@ -468,6 +541,8 @@ def _supervise(
                     break
                 time.sleep(min(0.02, max(0, deadline - now)))
             observed = time.monotonic()
+            if state == "completed" and observed >= deadline:
+                state = "timeout"
             cleanup = _cleanup(process)
             cleaned = True
             result = {
@@ -493,8 +568,8 @@ def _classification(criterion: str) -> str:
     return CRITERIA.get(criterion, "error")
 
 
-def _decode_reply(reply, manifest_sha, start_ns, observed):
-    """Validate the returned receipt; malformed declarations never become facts."""
+def _reply_binding(reply, manifest_sha, start_ns, observed):
+    """The unchanged historical envelope/clock checks, also used for v2."""
     for name in ("returned_wall_ns", "returned_monotonic_ns"):
         if type(reply[name]) is not int or reply[name] <= 0:
             raise ValueError("Invalid reply clock schema")
@@ -504,6 +579,11 @@ def _decode_reply(reply, manifest_sha, start_ns, observed):
         or reply["returned_monotonic_ns"] / 1e9 > observed + CLOCK_TOLERANCE_SECONDS
     ):
         raise ValueError("Reply bound to wrong compile or outside observed execution")
+
+
+def _decode_reply(reply, manifest_sha, start_ns, observed):
+    """Historical verdict decoder; v2 tags do not change its criterion semantics."""
+    _reply_binding(reply, manifest_sha, start_ns, observed)
     validation = reply["validation"]
     criterion = validation["criterion"]
     if type(criterion) is not str:
@@ -516,6 +596,68 @@ def _decode_reply(reply, manifest_sha, start_ns, observed):
         "error": "unknown_criterion",
     }.get(state)
     return state, criterion, reason, validation
+
+
+def _decode_hard_reply(reply, manifest_sha, start, observed):
+    """Validate v2 timeout declarations without changing the historical decoder."""
+    if set(reply) != {
+        "compile_manifest_sha256",
+        "verification_start_sha256",
+        "outcome",
+        "called_monotonic_ns",
+        "inner_seconds",
+        "validation",
+        "returned_wall_ns",
+        "returned_monotonic_ns",
+    }:
+        raise ValueError("Invalid hard-timeout reply schema")
+    called = reply["called_monotonic_ns"]
+    returned = reply["returned_monotonic_ns"]
+    inner = reply["inner_seconds"]
+    if (
+        type(called) is not int
+        or type(returned) is not int
+        or not start["monotonic_ns"] <= called <= returned
+        or type(inner) not in (int, float)
+        or not math.isfinite(inner)
+        or not math.isclose(
+            inner,
+            start["check_deadline_monotonic"]
+            - called / 1e9
+            - CURRENT.policy()["receipt_reserve_seconds"],
+            rel_tol=0,
+            abs_tol=CLOCK_TOLERANCE_SECONDS,
+        )
+    ):
+        raise ValueError("Invalid inner budget")
+    outcome = reply["outcome"]
+    if outcome == "returned":
+        if (
+            inner <= 0
+            or reply["validation"]["details"]["equivalence"] != reply["validation"]["criterion"]
+        ):
+            raise ValueError("Invalid returned criterion/budget")
+        return _decode_reply(reply, manifest_sha, start["monotonic_ns"], observed)
+    if (
+        reply["validation"] is not None
+        or outcome not in {"qcec_hard_timeout", "check_budget"}
+        or (outcome == "check_budget") != (inner <= 0)
+        or (
+            outcome == "qcec_hard_timeout"
+            and (returned - called) / 1e9 + CLOCK_TOLERANCE_SECONDS < inner
+        )
+    ):
+        raise ValueError("Invalid timeout declaration")
+    _reply_binding(reply, manifest_sha, start["monotonic_ns"], observed)
+    return "verification_incomplete", None, outcome, None
+
+
+def decode_check_reply(suite, reply, manifest_sha, start, observed, start_sha):
+    if suite == V1:
+        return _decode_reply(reply, manifest_sha, start["monotonic_ns"], observed)
+    if suite != CURRENT or reply["verification_start_sha256"] != start_sha:
+        raise ValueError("Reply/start identity mismatch")
+    return _decode_hard_reply(reply, manifest_sha, start, observed)
 
 
 def run_job(
@@ -539,17 +681,7 @@ def run_job(
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-    protocol = {
-        "repeats": REPEATS,
-        "whole_job_seconds": JOB_SECONDS,
-        "check_hard_seconds": CHECK_SECONDS,
-        "qcec_cooperative_seconds": 20,
-        "order": "compile-all-then-verify",
-        "deadline_policy": "observed-exit-before-cutoff",
-        "transport": "native-QPY",
-        "kind": "compile-retention",
-        "protocol_version": 1,
-    }
+    protocol = CURRENT.policy()
     inventory = {name: _digest(root / name) for name in SOURCE_NAMES}
     _json(
         directory / "spec.json",
@@ -600,13 +732,16 @@ def run_job(
                 )
             )
             continue
-        check_deadline = min(deadline, time.monotonic() + CHECK_SECONDS)
-        effective = min(CHECK_SECONDS, max(0, check_deadline - time.monotonic()))
+        check_start_ns = time.monotonic_ns()
+        check_started = check_start_ns / 1e9
+        check_deadline = min(deadline, check_started + CHECK_SECONDS)
+        effective = min(CHECK_SECONDS, max(0, check_deadline - check_started))
         _json(
             directory / f"r{repeat}.verification-start.json",
             {
                 "wall_ns": time.time_ns(),
-                "monotonic_ns": time.monotonic_ns(),
+                "monotonic_ns": check_start_ns,
+                "check_deadline_monotonic": check_deadline,
                 "effective_budget_seconds": effective,
                 "compile_manifest_sha256": _digest(compiled.manifest_path),
                 "manifest_mtime_ns": compiled.manifest_path.stat().st_mtime_ns,
@@ -630,7 +765,13 @@ def run_job(
         validation = None
         if process["state"] in {"timeout", "not_started"}:
             state = "verification_incomplete"
-            reason = "hard_timeout" if process["state"] == "timeout" else "job_budget"
+            reason = (
+                "hard_timeout"
+                if process["state"] == "timeout"
+                else "job_budget"
+                if check_deadline == deadline
+                else "check_budget"
+            )
         elif process["returncode"] != 0:
             state, reason = "error", "check_child_failure"
         else:
@@ -639,11 +780,13 @@ def run_job(
                 start_receipt = json.loads(
                     (directory / f"r{repeat}.verification-start.json").read_text()
                 )
-                state, criterion, reason, validation = _decode_reply(
+                state, criterion, reason, validation = decode_check_reply(
+                    CURRENT,
                     reply,
                     _digest(compiled.manifest_path),
-                    start_receipt["monotonic_ns"],
+                    start_receipt,
                     process["observed_monotonic"],
+                    _digest(directory / f"r{repeat}.verification-start.json"),
                 )
             except (OSError, ValueError, KeyError, TypeError):
                 state, reason = "error", "invalid_reply"

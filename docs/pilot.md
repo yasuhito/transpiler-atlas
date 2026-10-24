@@ -4,15 +4,19 @@
 
 The opt-in `retention-campaign` / `retention-run` path uses a new standalone
 spec/result/seal v3, without changing the historical worker, data or scores below.
-The same `atlas.compile_once` recipes and locked QCEC 3.10.1 are retained. Three
-compilations are committed create-only as QASM, actual native QPY and compile
+The same `atlas.compile_once` recipes are retained. New v2 creation uses locked
+QCEC 3.10.2 with `verify_with_hard_timeout`; sealed v1 remains QCEC 3.10.1 and is
+read without re-verification. Their suite and verifier identities cannot be mixed.
+Three compilations are committed create-only as QASM, actual native QPY and compile
 manifests before any strict check. Time, raw metrics, maps, scalar phase and hashes
 are retained even when verification cannot finish.
 
 One job deadline is 420 seconds including startup/export/storage/checks; each
 fresh checker gets min(60 seconds, remaining time), with the existing cooperative
 20-second QCEC timeout. The parent kills the process group and reaps direct and
-adopted descendants before another job starts. Cleanup is separately recorded.
+adopted descendants before another job starts. V2 reserves 1 second inside each
+check cap for its API timeout receipt, without extending either deadline. The
+outer backstop also bounds caller-side serialization. Cleanup is separately recorded.
 
 Primary precedence is `error > compile_incomplete > not_equivalent >
 verification_incomplete > passed`. Only returned `not_equivalent` is an explicit
@@ -28,7 +32,9 @@ The default new diagnostic fixes the exact 18 published timeout identities and
 54 repeats before execution, with shuffle seed 20261004. It adds no reference
 rows, so adjusted scores are N/A while raw values remain visible. Shared-host
 timings are diagnostic, not performance comparisons. No selective retry, resume,
-backfill, old/new merge or publication is authorized by this operation.
+backfill or old/new merge is allowed. The approved 3.10.2 rerun is archived and
+displayed as a separate diagnostic beside v1, not in the 13-configuration ranking.
+No push, PR or root publication-selector change is authorized.
 The seal requires all scheduled terminal facts and re-derived hashes, native
 metrics, maps, phase, classifications and medians. It authenticates complete
 evidence, not universal success. Cancellation, missing jobs or tampering refuse

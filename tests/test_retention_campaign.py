@@ -52,7 +52,16 @@ def test_schedule_frozen_and_origin_authenticated(tmp_path):
     assert a["schedule"] == b["schedule"]
     assert len(a["schedule"]) == 18 and len(a["execution_identities"]) == 18
     assert a["shuffle_seed"] == 20261004
-    assert a["policy"] == campaign.policy()
+    assert a["policy"] == h.CURRENT.policy()
+    assert a["versions"]["mqt-qcec"] == campaign.QCEC_VERSION == "3.10.2"
+    assert a["protocol"]["validation"].endswith("QCEC 3.10.2")
+    assert a["suite"] == h.CURRENT.name != h.V1.name
+    assert campaign.frozen_suite(a) == h.CURRENT
+    changed = copy.deepcopy(a)
+    changed["versions"]["mqt-qcec"] = "3.10.1"
+    with pytest.raises(ValueError, match="identity mismatch"):
+        campaign.frozen_suite(changed)
+    assert campaign.identity(changed, h.Job(**a["schedule"][0])) != a["execution_identities"][0]
     assert a["origin"]["purpose"] == "historical-timeout-diagnostic"
     assert a["source_inventory"]["uv.lock"] == legacy.digest(atlas.ROOT / "uv.lock")
     assert not (first / "RUN_STARTED").exists()
@@ -80,7 +89,12 @@ def test_real_compile_check_seal_and_create_only(measured, monkeypatch):
         start = json.loads((directory / "r0.verification-start.json").read_text())
         assert len(commits) == 3
         assert max(e["monotonic_ns"] for e in commits) < start["monotonic_ns"]
+        compiler = json.loads((directory / "compile.process.json").read_text())
         for repeat in range(3):
+            entered = json.loads((directory / f"r{repeat}.check-entered.json").read_text())
+            assert entered["monotonic_ns"] / 1e9 > (
+                compiler["observed_monotonic"] + compiler["cleanup_seconds"]
+            )
             process = json.loads((directory / f"check-r{repeat}.process.json").read_text())
             assert not process["members_after_cleanup"]
             assert not h._members(process["pid"])
@@ -104,6 +118,8 @@ def test_real_compile_check_seal_and_create_only(measured, monkeypatch):
     [
         ("timeout", "verification_incomplete", 3),
         ("returned", "verification_incomplete", 3),
+        ("api_timeout", "verification_incomplete", 3),
+        ("api_budget", "verification_incomplete", 3),
         ("passed", "passed", 3),
         ("unknown", "error", 3),
         ("not_equivalent", "not_equivalent", 3),
@@ -140,6 +156,10 @@ def test_terminal_failures_keep_raw_and_can_be_sealed(workspace, monkeypatch, mo
     if mode in {"bad_acceptance", "invalid_criterion", "early_reply", "invalid_clock"}:
         assert all(t["verification"]["reason"] == "invalid_reply" for t in row["trials"])
         assert not any(t["validation"]["accepted"] for t in row["trials"])
+    if mode in {"api_timeout", "api_budget"}:
+        expected = "qcec_hard_timeout" if mode == "api_timeout" else "check_budget"
+        assert all(t["verification"]["reason"] == expected for t in row["trials"])
+        assert all(t["verification"]["criterion"] is None for t in row["trials"])
     if mode == "mixed":
         assert [t["verification"]["state"] for t in row["trials"]] == [
             "not_equivalent",
@@ -304,6 +324,27 @@ def test_preview_build_preserves_seal_and_raw(measured, tmp_path):
     assert raw["results"] == json.loads(before)["results"]
     with pytest.raises(FileExistsError):
         campaign.preview(measured, destination)
+
+
+def test_start_receipt_fsync_can_exhaust_budget_without_blocking_seal(workspace, monkeypatch):
+    root, spec = workspace
+    report, spawned = simulate(root, spec, monkeypatch, "start_receipt_cutoff")
+    assert report.status == "verification_incomplete"
+    assert [name for name, _ in spawned] == ["compile"]
+    raw = finish_fixture(root, spec)
+    assert all(t["verification"]["reason"] == "check_budget" for t in raw["results"][0]["trials"])
+    campaign.validate_completed(root)
+
+
+def test_reader_rejects_changed_absolute_check_cutoff(workspace, monkeypatch):
+    root, spec = workspace
+    simulate(root, spec, monkeypatch)
+    path = root / campaign.job_prefix(spec, 0) / "r0.verification-start.json"
+    receipt = json.loads(path.read_text())
+    receipt["check_deadline_monotonic"] += 1
+    path.write_text(json.dumps(receipt))
+    with pytest.raises(ValueError, match="Absolute check budget"):
+        campaign.reconstruct(root, spec, 0)
 
 
 def test_new_source_and_budget_change_execution_identity(workspace):

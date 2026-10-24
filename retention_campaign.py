@@ -30,9 +30,10 @@ import retention as h
 from campaign import SOURCE_FILES, THREAD_NAMES, digest, input_cases, relative_file
 
 KIND = "compile-retention"
-SUITE = "pilot-compile-retention-v1-420s-check60"
+SUITE = h.CURRENT.name
 SHUFFLE_SEED = 20261004
 SCORE_VERSION = "qcec-adjusted-partial-v2"
+QCEC_VERSION = h.CURRENT.qcec_version
 SOURCES = (*SOURCE_FILES, "retention.py", "retention_campaign.py")
 MARKER = "MEASUREMENT_COMPLETE"
 SNAPSHOT = "snapshot-manifest.json"
@@ -47,18 +48,28 @@ def versions():
     return {d.metadata["Name"]: d.version for d in importlib.metadata.distributions()}
 
 
-def policy():
-    return {
-        "repeats": h.REPEATS,
-        "whole_job_seconds": h.JOB_SECONDS,
-        "check_hard_seconds": h.CHECK_SECONDS,
-        "qcec_cooperative_seconds": 20,
-        "order": "compile-all-then-verify",
-        "deadline_policy": "observed-exit-before-cutoff",
-        "transport": "native-QPY",
-        "kind": KIND,
-        "protocol_version": 1,
-    }
+def frozen_suite(spec):
+    """Parse an exact suite/policy/verifier binding, independent of live packages."""
+    suite = h.SUITES.get(spec["suite"])
+    if suite is None:
+        raise ValueError("Unknown retention suite")
+    qcec_versions = [
+        v
+        for k, v in spec["versions"].items()
+        if k.lower().replace("-", ".").replace("_", ".") == "mqt.qcec"
+    ]
+    if (
+        spec["policy"] != suite.policy()
+        or qcec_versions != [suite.qcec_version]
+        or spec["protocol"]["protocol_version"] != suite.protocol_version
+        or not spec["campaign_id"].startswith(suite.name + "-")
+        or spec["protocol"]["validation"]
+        != "strict native QPY with logical-to-physical maps and scalar phase; "
+        f"QCEC {suite.qcec_version}"
+        or spec["protocol"].get("verifier") != suite.verifier
+    ):
+        raise ValueError("Retention suite/verifier/policy identity mismatch")
+    return suite
 
 
 def identity(spec, job):
@@ -103,7 +114,8 @@ def _protocol(configurations, jobs):
 
     return {
         "kind": KIND,
-        "protocol_version": 1,
+        "protocol_version": h.CURRENT.protocol_version,
+        "verifier": h.CURRENT.verifier,
         "score_version": SCORE_VERSION,
         "configurations": configurations,
         "compilers": sorted({c["compiler"] for c in configurations}),
@@ -114,13 +126,7 @@ def _protocol(configurations, jobs):
         "reference_configuration": atlas.REFERENCE_CONFIGURATION,
         "worker_timeout_seconds": 420,
         "verification_hard_timeout_seconds": 60,
-        "checker_options": {
-            "run_simulation_checker": False,
-            "run_zx_checker": False,
-            "parallel": False,
-            "nthreads": 1,
-            "timeout": 20,
-        },
+        "checker_options": dict(atlas.STRICT_CHECKER_OPTIONS),
         "basis": sorted(atlas.BASIS),
         "physical_qubits": "equal to input width",
         "timer": (
@@ -138,7 +144,7 @@ def _protocol(configurations, jobs):
             "error_threshold": None,
         },
         "validation": (
-            "strict native QPY with logical-to-physical maps and scalar phase; QCEC 3.10.1"
+            f"strict native QPY with logical-to-physical maps and scalar phase; QCEC {QCEC_VERSION}"
         ),
         "output_commit": "create-only QASM + QPY + manifest last, file and directory fsync",
         "cleanup": (
@@ -211,8 +217,8 @@ def create(into, *, prepare_only=False, identities=None):
         ):
             raise ValueError("Unknown input or invalid seed")
         atlas.edges_for(case_by_id[job.case_id]["qubits"], job.target)
-    if importlib.metadata.version("mqt.qcec") != "3.10.1":
-        raise ValueError("This protocol requires locked QCEC 3.10.1")
+    if importlib.metadata.version("mqt.qcec") != QCEC_VERSION:
+        raise ValueError(f"This protocol requires locked QCEC {QCEC_VERSION}")
     jobs.sort(key=lambda j: (j.case_id, j.configuration_id, j.target, j.seed))
     random.Random(SHUFFLE_SEED).shuffle(jobs)
     allowed = sorted(os.sched_getaffinity(0))
@@ -260,7 +266,7 @@ def create(into, *, prepare_only=False, identities=None):
             ).strip()
         ),
         "created_at": datetime.now(UTC).isoformat(),
-        "policy": policy(),
+        "policy": h.CURRENT.policy(),
         "shuffle_seed": SHUFFLE_SEED,
         "schedule": [asdict(j) for j in jobs],
         "cases": [case_by_id[name] for name in sorted({j.case_id for j in jobs})],
@@ -327,20 +333,17 @@ def _read(resolve, name):
 
 
 def validate_workspace(root, resolve=None):
+    import atlas
+
     root = Path(root)
     resolve = resolve or (lambda name: relative_file(root, name))
     spec = _read(resolve, "campaign.json")
-    if (
-        spec["spec_format_version"] != 3
-        or spec["kind"] != KIND
-        or spec["suite"] != SUITE
-        or spec["policy"] != policy()
-        or spec["protocol"]["kind"] != KIND
-    ):
+    suite = frozen_suite(spec)
+    if spec["spec_format_version"] != 3 or spec["kind"] != KIND or spec["protocol"]["kind"] != KIND:
         raise ValueError("Unknown or changed standalone protocol")
     if (
         not re.fullmatch(r"[a-zA-Z0-9_-]+", spec["campaign_id"])
-        or not spec["campaign_id"].startswith(SUITE + "-")
+        or not spec["campaign_id"].startswith(suite.name + "-")
         or not re.fullmatch(r"[0-9a-f]{40}", spec["source_commit"])
     ):
         raise ValueError("Invalid campaign/source identity")
@@ -352,14 +355,7 @@ def validate_workspace(root, resolve=None):
         or spec["protocol"]["worker_timeout_seconds"] != 420
         or spec["protocol"]["verification_hard_timeout_seconds"] != 60
         or spec["protocol"]["score_version"] != SCORE_VERSION
-        or spec["protocol"]["checker_options"]
-        != {
-            "run_simulation_checker": False,
-            "run_zx_checker": False,
-            "parallel": False,
-            "nthreads": 1,
-            "timeout": 20,
-        }
+        or spec["protocol"]["checker_options"] != atlas.STRICT_CHECKER_OPTIONS
     ):
         raise ValueError("Standalone protocol budget/checker mismatch")
     if set(spec["source_inventory"]) != set(SOURCES):
@@ -369,13 +365,6 @@ def validate_workspace(root, resolve=None):
             raise ValueError(f"Frozen file hash mismatch: {name}")
     if any(spec["files"].get(name) != sha for name, sha in spec["source_inventory"].items()):
         raise ValueError("Source hash mismatch")
-    qcec_versions = [
-        v
-        for k, v in spec["versions"].items()
-        if k.lower().replace("-", ".").replace("_", ".") == "mqt.qcec"
-    ]
-    if qcec_versions != ["3.10.1"]:
-        raise ValueError("QCEC verifier identity mismatch")
     jobs = [h.Job(**j) for j in spec["schedule"]]
     if not jobs or len(set(jobs)) != len(jobs):
         raise ValueError("Duplicate or missing scheduled jobs")
@@ -430,10 +419,23 @@ def _finite(value, name):
         raise ValueError(f"Invalid {name}")
 
 
-def _process(fact, deadline):
+def _process(fact, deadline, suite):
     if fact["state"] == "not_started":
-        if fact != {"state": "not_started", "wall_seconds": 0, "reason": "job_budget"}:
-            raise ValueError("Invalid unstarted process fact")
+        if suite == h.V1:
+            if fact != {"state": "not_started", "wall_seconds": 0, "reason": "job_budget"}:
+                raise ValueError("Invalid unstarted process fact")
+        else:
+            if (
+                set(fact)
+                != {"state", "wall_seconds", "reason", "observed_monotonic", "deadline_monotonic"}
+                or fact["wall_seconds"] != 0
+                or fact["reason"] != "deadline"
+            ):
+                raise ValueError("Invalid unstarted process fact")
+            _finite(fact["observed_monotonic"], "unstarted observation")
+            _finite(fact["deadline_monotonic"], "unstarted deadline")
+            if not fact["observed_monotonic"] >= fact["deadline_monotonic"] <= deadline:
+                raise ValueError("Unstarted process with remaining budget")
         return
     if fact["state"] not in {"completed", "timeout"}:
         raise ValueError("Nonterminal/cancelled process fact")
@@ -447,7 +449,7 @@ def _process(fact, deadline):
         raise ValueError("Late result classification mismatch")
 
 
-def _expected_check(repeat, read, previous_end, deadline):
+def _expected_check(suite, repeat, read, previous_end, deadline):
     verify = read(f"r{repeat}.verification.json")
     process = read(f"check-r{repeat}.process.json")
     start = read(f"r{repeat}.verification-start.json")
@@ -459,7 +461,21 @@ def _expected_check(repeat, read, previous_end, deadline):
         or verify["effective_budget_seconds"] != start["effective_budget_seconds"]
     ):
         raise ValueError("Verification binding mismatch")
-    _process(process, deadline)
+    _process(process, deadline, suite)
+    if suite == h.CURRENT:
+        cutoff = start["check_deadline_monotonic"]
+        expected_cutoff = min(deadline, start["monotonic_ns"] / 1e9 + h.CHECK_SECONDS)
+        if (
+            cutoff != expected_cutoff
+            or cutoff != process["deadline_monotonic"]
+            or not math.isclose(
+                start["effective_budget_seconds"],
+                max(0, cutoff - start["monotonic_ns"] / 1e9),
+                rel_tol=0,
+                abs_tol=h.CLOCK_TOLERANCE_SECONDS,
+            )
+        ):
+            raise ValueError("Absolute check budget mismatch")
     effective = start["effective_budget_seconds"]
     _finite(effective, "effective check budget")
     if effective > 60 or (
@@ -470,8 +486,16 @@ def _expected_check(repeat, read, previous_end, deadline):
         raise ValueError("Per-check budget exceeded")
     if start["monotonic_ns"] / 1e9 + h.CLOCK_TOLERANCE_SECONDS < previous_end:
         raise ValueError("Check started before prior group cleanup")
-    if process["state"] == "not_started" and (
-        effective != 0 or start["monotonic_ns"] / 1e9 + h.CLOCK_TOLERANCE_SECONDS < deadline
+    if (
+        suite == h.CURRENT
+        and process["state"] == "not_started"
+        and process["observed_monotonic"] + h.CLOCK_TOLERANCE_SECONDS < start["monotonic_ns"] / 1e9
+    ):
+        raise ValueError("No-start observation predates check start")
+    if (
+        suite == h.V1
+        and process["state"] == "not_started"
+        and (effective != 0 or start["monotonic_ns"] / 1e9 + h.CLOCK_TOLERANCE_SECONDS < deadline)
     ):
         raise ValueError("Unstarted check with remaining budget")
     criterion = None
@@ -479,15 +503,24 @@ def _expected_check(repeat, read, previous_end, deadline):
     if process["state"] in {"timeout", "not_started"}:
         state, reason = (
             "verification_incomplete",
-            "hard_timeout" if process["state"] == "timeout" else "job_budget",
+            "hard_timeout"
+            if process["state"] == "timeout"
+            else "check_budget"
+            if suite == h.CURRENT and process["deadline_monotonic"] < deadline
+            else "job_budget",
         )
     elif process["returncode"] != 0:
         state, reason = "error", "check_child_failure"
     else:
         try:
             reply = read(f"r{repeat}.reply.json")
-            state, criterion, reason, validation = h._decode_reply(
-                reply, manifest_sha, start["monotonic_ns"], process["observed_monotonic"]
+            state, criterion, reason, validation = h.decode_check_reply(
+                suite,
+                reply,
+                manifest_sha,
+                start,
+                process["observed_monotonic"],
+                digest(read.path(f"r{repeat}.verification-start.json")),
             )
         except (OSError, ValueError, KeyError, TypeError):
             state, reason = "error", "invalid_reply"
@@ -503,6 +536,7 @@ def reconstruct(root, spec, ordinal, resolve=None):
     root = Path(root)
     resolve = resolve or (lambda name: relative_file(root, name))
     prefix = job_prefix(spec, ordinal)
+    suite = frozen_suite(spec)
     directory = root / prefix
 
     def local(path):
@@ -536,8 +570,10 @@ def reconstruct(root, spec, ordinal, resolve=None):
     if not math.isclose(deadline - job_spec["start_monotonic"], 420, abs_tol=1e-8):
         raise ValueError("Whole-job budget mismatch")
     compiler = read("compile.process.json")
-    _process(compiler, deadline)
-    if compiler["state"] != "not_started" and compiler["deadline_monotonic"] != deadline:
+    _process(compiler, deadline, suite)
+    if (compiler["state"] != "not_started" or suite == h.CURRENT) and compiler[
+        "deadline_monotonic"
+    ] != deadline:
         raise ValueError("Compile deadline mismatch")
     fault = (
         "compile_child_failure"
@@ -548,6 +584,8 @@ def reconstruct(root, spec, ordinal, resolve=None):
     previous_end = (
         compiler["observed_monotonic"] + compiler["cleanup_seconds"]
         if compiler["state"] != "not_started"
+        else compiler["observed_monotonic"]
+        if suite == h.CURRENT
         else deadline
     )
     for repeat in range(3):
@@ -568,10 +606,12 @@ def reconstruct(root, spec, ordinal, resolve=None):
             != read.path(f"r{repeat}.qpy").read_bytes()[:12].hex()
         ):
             raise ValueError("Native output rules/format identity mismatch")
-        check, verify = _expected_check(repeat, read, previous_end, deadline)
+        check, verify = _expected_check(suite, repeat, read, previous_end, deadline)
         process = verify["process"]
         if process["state"] != "not_started":
             previous_end = process["observed_monotonic"] + process["cleanup_seconds"]
+        elif suite == h.CURRENT:
+            previous_end = process["observed_monotonic"]
         facts.append(h.SavedTrial(compiled, check))
         trials.append(
             {
@@ -661,7 +701,7 @@ def _document(spec, rows, started):
     return {
         "schema_version": 3,
         "kind": KIND,
-        "suite": SUITE,
+        "suite": spec["suite"],
         "campaign_id": spec["campaign_id"],
         "source_commit": spec["source_commit"],
         "created_at": started["created_at"],
@@ -709,6 +749,8 @@ def run(root):
     ):
         raise FileExistsError("Cannot rerun or recover an existing campaign")
     spec = validate_workspace(root)
+    if frozen_suite(spec) != h.CURRENT:
+        raise ValueError("Historical retention suites are read-only")
     if versions() != spec["versions"]:
         raise ValueError("Resolved environment changed")
     if not set(spec["planned_affinity"]).issubset(os.sched_getaffinity(0)):
@@ -792,7 +834,7 @@ def finish(root, document):
         "seal_format_version": 3,
         "kind": KIND,
         "campaign_id": spec["campaign_id"],
-        "suite": SUITE,
+        "suite": spec["suite"],
         "spec_sha256": digest(root / "campaign.json"),
         "source_commit": spec["source_commit"],
         "scheduled_entries": len(spec["schedule"]),
