@@ -1,0 +1,6 @@
+{"event": "compile_start", "wall_ns": 1792811809319240917, "monotonic_ns": 508366958977543, "repeat": 0}
+{"event": "compile_committed", "wall_ns": 1792811835429261496, "monotonic_ns": 508393068996802, "repeat": 0, "manifest_mtime_ns": 1792811835429185458}
+{"event": "compile_start", "wall_ns": 1792811835429305664, "monotonic_ns": 508393069040110, "repeat": 1}
+{"event": "compile_committed", "wall_ns": 1792811860266042655, "monotonic_ns": 508417905777720, "repeat": 1, "manifest_mtime_ns": 1792811860265999396}
+{"event": "compile_start", "wall_ns": 1792811860266065054, "monotonic_ns": 508417905799410, "repeat": 2}
+{"event": "compile_committed", "wall_ns": 1792811886117827248, "monotonic_ns": 508443757562074, "repeat": 2, "manifest_mtime_ns": 1792811886117784199}

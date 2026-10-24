@@ -1,0 +1,18 @@
+{
+  "state": "completed",
+  "pid": 1392673,
+  "wall_seconds": 34.556140970031265,
+  "deadline_monotonic": 506298.086392172,
+  "observed_monotonic": 506272.642667978,
+  "returncode": 0,
+  "cleanup_seconds": 0.03763916902244091,
+  "members_before_cleanup": [
+    {
+      "pid": 1392673,
+      "ppid": 1088122,
+      "state": "Z"
+    }
+  ],
+  "adopted_reaped": [],
+  "members_after_cleanup": []
+}

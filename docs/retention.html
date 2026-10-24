@@ -18,7 +18,7 @@
     pre code{background:none;padding:0}
     blockquote{border-left:3px solid #8d77e5;padding-left:20px;color:var(--muted)}
     @media(max-width:600px){main{padding:20px}h1{font-size:26px}}
-    </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><a href="../diagnostics/compile-retention/index.html">Compile retention diagnostic (QCEC 3.10.1)</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="standalone-compile-retention-protocols-v1-and-v2">Standalone compile-retention protocols v1 and v2</h1>
+    </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><a href="../diagnostics/compile-retention/index.html">Compile retention diagnostic (QCEC 3.10.1)</a><a href="../diagnostics/compile-retention-v2-qcec3102/index.html">Compile retention diagnostic (QCEC 3.10.2)</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="standalone-compile-retention-protocols-v1-and-v2">Standalone compile-retention protocols v1 and v2</h1>
 <p>These are separate measurement campaigns, not retries or replacements of the
 published v0.4/QMAP/Cirq records. New creation uses locked QCEC 3.10.2 and suite
 <code>pilot-compile-retention-v2-qcec3102-420s-check60</code>. Sealed v1 uses QCEC 3.10.1 and
@@ -36,6 +36,15 @@ outputs have 90 two-qubit gates and two-qubit-only depth 20. One-qubit counts ra
 from 597 to 666, including 647/654/666 at L4; full depths range from 97 to 102.
 This evidence is separate from the 13-configuration root publication and does not
 change its selector, historical data or scores.</p>
+<p>The separately selected QCEC 3.10.2 v2 diagnostic
+(<code>diagnostics/compile-retention-v2-qcec3102/index.html</code>) contains the approved fresh run of the same 18 identities and 54 trials. All 54
+native bundles were saved. Verification returned 51 <code>no_information</code> criteria;
+three calls raised the API hard timeout. No outer hard cutoff occurred. All 18
+jobs remain <code>verification_incomplete</code>, with zero strict accepts, explicit
+mismatches, errors or incomplete compilations. A returned inconclusive criterion
+is a finished API call, not a proof of equivalence. Verification wall time totals
+1,642.310 seconds (median 27.111, range 21.074 to 59.157 seconds). Shared-host times
+are diagnostic, not a matched-host speed comparison with v1.</p>
 <p>Run <code>uv run build_site.py</code> to regenerate both the root report and diagnostic pages.
 Each <code>diagnostics/*/report.json</code> selects one exact sealed FileMap independently of
 <code>publication.json</code>. Archived measurement source remains frozen; the page template

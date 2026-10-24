@@ -45,6 +45,27 @@ def test_diagnostic_uses_verified_seal_and_preserves_root_selector(monkeypatch):
     assert (build_site.ROOT / "publication.json").read_bytes() == before
 
 
+def test_v2_is_separately_selected_beside_v1():
+    pages = build_site._diagnostic_pages()
+    assert {label for _, _, label in pages} == {
+        "Compile retention diagnostic (QCEC 3.10.1)",
+        "Compile retention diagnostic (QCEC 3.10.2)",
+    }
+    path, page, _ = next(
+        entry for entry in pages if entry[0].parent.name == "compile-retention-v2-qcec3102"
+    )
+    config = json.loads((path.parent / "report.json").read_text())
+    data, _ = publication.load(build_site.ROOT, file_map=config["file_map"])
+    assert data["suite"] == "pilot-compile-retention-v2-qcec3102-420s-check60"
+    assert page.count("data-identity=") == 18
+    assert page.count("nonconclusive_criterion") == 51
+    assert page.count("qcec_hard_timeout") == 3
+    assert "QCEC 3.10.2 with verify_with_hard_timeout" in page
+    assert "54/54 committed repeats" in page
+    assert "0/54 strict accepts" in page
+    assert "compile-retention/index.html" in page
+
+
 def test_diagnostic_refuses_unvalidated_seal(monkeypatch):
     def reject(*args, **kwargs):
         raise ValueError("Invalid seal")

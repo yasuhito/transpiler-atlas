@@ -1,0 +1,28 @@
+{
+  "compile_manifest_sha256": "78e1fc598cdce666b593d95f7a2daafcbcc99a71fb159c072d666dc744cb2a40",
+  "verification_start_sha256": "9d4ee7c94c09f284140a4ea72ae40c5c0a806a48a45ebd6e3da1750ab0594fb8",
+  "outcome": "returned",
+  "called_monotonic_ns": 507396131213323,
+  "inner_seconds": 58.73973566800123,
+  "validation": {
+    "accepted": false,
+    "criterion": "no_information",
+    "details": {
+      "check_time": 20.939767232,
+      "checkers": [
+        {
+          "checker": "decision_diagram_alternating",
+          "equivalence": "no_information",
+          "runtime": 0.0
+        }
+      ],
+      "equivalence": "no_information",
+      "parameterized": {
+        "performed_instantiations": 0
+      },
+      "preprocessing_time": 0.00886607
+    }
+  },
+  "returned_wall_ns": 1792810859864819693,
+  "returned_monotonic_ns": 507417504555719
+}

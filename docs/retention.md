@@ -20,6 +20,16 @@ from 597 to 666, including 647/654/666 at L4; full depths range from 97 to 102.
 This evidence is separate from the 13-configuration root publication and does not
 change its selector, historical data or scores.
 
+The separately selected QCEC 3.10.2 v2 diagnostic
+(`diagnostics/compile-retention-v2-qcec3102/index.html`) contains the approved fresh run of the same 18 identities and 54 trials. All 54
+native bundles were saved. Verification returned 51 `no_information` criteria;
+three calls raised the API hard timeout. No outer hard cutoff occurred. All 18
+jobs remain `verification_incomplete`, with zero strict accepts, explicit
+mismatches, errors or incomplete compilations. A returned inconclusive criterion
+is a finished API call, not a proof of equivalence. Verification wall time totals
+1,642.310 seconds (median 27.111, range 21.074 to 59.157 seconds). Shared-host times
+are diagnostic, not a matched-host speed comparison with v1.
+
 Run `uv run build_site.py` to regenerate both the root report and diagnostic pages.
 Each `diagnostics/*/report.json` selects one exact sealed FileMap independently of
 `publication.json`. Archived measurement source remains frozen; the page template
