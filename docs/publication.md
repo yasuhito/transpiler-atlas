@@ -67,14 +67,16 @@ The historical QMAP report showed 12 configurations and distinguished QMAP's new
 is the unchanged v0.4 reference. Publication does not authorize remeasurement,
 selective retry, push or release creation.
 
-## Standalone compile-retention v3, not yet published
+## Standalone compile-retention, schema/seal v3
 
 The new `kind=compile-retention` reader handles spec, result schema and seal v3
 as a standalone dataset, never a fourth source merged into the historical rows.
 An explicit precommitted ordered schedule and new execution identities separate
 420/60/20-second retained-compilation diagnostics from the old timeout records.
-QCEC remains 3.10.1; recipes and display configuration IDs are not new evidence
-that the execution identity is unchanged.
+Sealed suite v1 uses QCEC 3.10.1; new suite v2 uses locked QCEC 3.10.2 and its
+`verify_with_hard_timeout` API inside the existing outer process-group backstop.
+The reader binds each suite to its exact verifier and policy. Recipes and display
+configuration IDs are not evidence that the execution identity is unchanged.
 
 Every scheduled job must have terminal facts. The validator re-derives QPY/native
 output rules, phase/maps, hashes, raw metrics, medians, classification and rollup
@@ -86,9 +88,11 @@ create-only snapshot is followed last by `MEASUREMENT_COMPLETE`. A FileMap must
 cover exactly the snapshot files plus snapshot and marker, and artifact links
 must resolve to the same sealed physical bytes.
 
-A later publication needs separate approval and would add a standalone campaign
+The diagnostic is selected independently through `diagnostics/*/report.json`, not
+the root `publication.json`. The approved 3.10.2 rerun adds a new standalone campaign
 archive, raw result, exact FileMap, QASM/QPY/manifests/logs and a dedicated report
-or standalone selector. It must not backfill the 18 historical identities, replace
+beside the sealed v1 diagnostic. Its 18 identities and three trials per identity
+are a new measurement, not an update of v1. It must not backfill historical rows, replace
 old output files, recompute `qcec-adjusted-v1`, or rewrite old campaigns, releases,
 attempts or seals. The partial-raw viewer uses `qcec-adjusted-partial-v2` only for
 this protocol. No reference rows are in the timeout diagnostic, so Quality/Speed

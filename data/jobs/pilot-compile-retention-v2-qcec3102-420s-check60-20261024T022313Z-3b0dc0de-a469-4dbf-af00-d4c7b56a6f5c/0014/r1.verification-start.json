@@ -1,0 +1,8 @@
+{
+  "wall_ns": 1792811761458377363,
+  "monotonic_ns": 508319098104859,
+  "check_deadline_monotonic": 508379.098104859,
+  "effective_budget_seconds": 60,
+  "compile_manifest_sha256": "83e79f0e6ca83dce04c296c49fd007021f8fe7ee3820864d1125145f4ff65c87",
+  "manifest_mtime_ns": 1792811711975939651
+}

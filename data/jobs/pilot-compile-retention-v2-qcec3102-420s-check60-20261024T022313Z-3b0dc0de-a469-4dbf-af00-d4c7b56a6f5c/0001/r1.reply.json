@@ -1,0 +1,10 @@
+{
+  "compile_manifest_sha256": "bf8c2ac62c8e1ac441b4d31ba9c30aba371d4cc86450575ef7ecbed16cab6180",
+  "verification_start_sha256": "0cb2ca7d27f5fcd857c0e1d60157b64405394b1cb711b7495a9b30b0f2646bbe",
+  "outcome": "qcec_hard_timeout",
+  "called_monotonic_ns": 506052149711039,
+  "inner_seconds": 58.7687416030094,
+  "validation": null,
+  "returned_wall_ns": 1792809553346159950,
+  "returned_monotonic_ns": 506110985896456
+}

@@ -1,0 +1,4 @@
+{"event": "job_start", "wall_ns": 1792811248415435225, "monotonic_ns": 507806055170191}
+{"event": "verification_start", "wall_ns": 1792811283409100734, "monotonic_ns": 507841048835110, "repeat": 0, "effective_budget_seconds": 60}
+{"event": "verification_start", "wall_ns": 1792811318935611576, "monotonic_ns": 507876575345962, "repeat": 1, "effective_budget_seconds": 60}
+{"event": "verification_start", "wall_ns": 1792811348459312091, "monotonic_ns": 507906099046567, "repeat": 2, "effective_budget_seconds": 60}

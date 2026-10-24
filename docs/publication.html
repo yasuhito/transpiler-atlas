@@ -18,7 +18,7 @@
     pre code{background:none;padding:0}
     blockquote{border-left:3px solid #8d77e5;padding-left:20px;color:var(--muted)}
     @media(max-width:600px){main{padding:20px}h1{font-size:26px}}
-    </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><a href="../diagnostics/compile-retention/index.html">Compile retention diagnostic</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="sealed-mixed-source-publication">Sealed mixed-source publication</h1>
+    </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><a href="../diagnostics/compile-retention/index.html">Compile retention diagnostic (QCEC 3.10.1)</a><a href="../diagnostics/compile-retention-v2-qcec3102/index.html">Compile retention diagnostic (QCEC 3.10.2)</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="sealed-mixed-source-publication">Sealed mixed-source publication</h1>
 <h2 id="current-cirq-v2-publication">Current Cirq v2 publication</h2>
 <p>The current selector serves 936 records, 13 configurations and three sources.
 The historical QMAP-only cohort below had 12 configurations; that is not the
@@ -74,13 +74,15 @@ is stored next to that combined file; the old sidecar is retained.</p>
 600-second timeout-only retries. This is not a matched-budget rerun. Qiskit L2
 is the unchanged v0.4 reference. Publication does not authorize remeasurement,
 selective retry, push or release creation.</p>
-<h2 id="standalone-compile-retention-v3-not-yet-published">Standalone compile-retention v3, not yet published</h2>
+<h2 id="standalone-compile-retention-schemaseal-v3">Standalone compile-retention, schema/seal v3</h2>
 <p>The new <code>kind=compile-retention</code> reader handles spec, result schema and seal v3
 as a standalone dataset, never a fourth source merged into the historical rows.
 An explicit precommitted ordered schedule and new execution identities separate
 420/60/20-second retained-compilation diagnostics from the old timeout records.
-QCEC remains 3.10.1; recipes and display configuration IDs are not new evidence
-that the execution identity is unchanged.</p>
+Sealed suite v1 uses QCEC 3.10.1; new suite v2 uses locked QCEC 3.10.2 and its
+<code>verify_with_hard_timeout</code> API inside the existing outer process-group backstop.
+The reader binds each suite to its exact verifier and policy. Recipes and display
+configuration IDs are not evidence that the execution identity is unchanged.</p>
 <p>Every scheduled job must have terminal facts. The validator re-derives QPY/native
 output rules, phase/maps, hashes, raw metrics, medians, classification and rollup
 without running QCEC. QASM, actual QPY, compile commit manifests, check replies,
@@ -90,9 +92,11 @@ missing job, cancelled schedule, corrupt bundle or altered file cannot. The
 create-only snapshot is followed last by <code>MEASUREMENT_COMPLETE</code>. A FileMap must
 cover exactly the snapshot files plus snapshot and marker, and artifact links
 must resolve to the same sealed physical bytes.</p>
-<p>A later publication needs separate approval and would add a standalone campaign
+<p>The diagnostic is selected independently through <code>diagnostics/*/report.json</code>, not
+the root <code>publication.json</code>. The approved 3.10.2 rerun adds a new standalone campaign
 archive, raw result, exact FileMap, QASM/QPY/manifests/logs and a dedicated report
-or standalone selector. It must not backfill the 18 historical identities, replace
+beside the sealed v1 diagnostic. Its 18 identities and three trials per identity
+are a new measurement, not an update of v1. It must not backfill historical rows, replace
 old output files, recompute <code>qcec-adjusted-v1</code>, or rewrite old campaigns, releases,
 attempts or seals. The partial-raw viewer uses <code>qcec-adjusted-partial-v2</code> only for
 this protocol. No reference rows are in the timeout diagnostic, so Quality/Speed

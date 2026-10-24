@@ -1,0 +1,47 @@
+{
+  "compile_manifest_sha256": "836492ce9f6ec168ad974a41da20c17f0cb46232e162d8f014e1a19badbe1d81",
+  "check": {
+    "state": "verification_incomplete",
+    "criterion": "no_information",
+    "reason": "nonconclusive_criterion",
+    "wall_seconds": 22.97065393900266
+  },
+  "process": {
+    "state": "completed",
+    "pid": 1525881,
+    "wall_seconds": 22.97065393900266,
+    "deadline_monotonic": 506564.490849169,
+    "observed_monotonic": 506527.461616984,
+    "returncode": 0,
+    "cleanup_seconds": 0.03337729600025341,
+    "members_before_cleanup": [
+      {
+        "pid": 1525881,
+        "ppid": 1088122,
+        "state": "Z"
+      }
+    ],
+    "adopted_reaped": [],
+    "members_after_cleanup": []
+  },
+  "effective_budget_seconds": 60,
+  "validation": {
+    "accepted": false,
+    "criterion": "no_information",
+    "details": {
+      "check_time": 22.446525103,
+      "checkers": [
+        {
+          "checker": "decision_diagram_alternating",
+          "equivalence": "no_information",
+          "runtime": 0.0
+        }
+      ],
+      "equivalence": "no_information",
+      "parameterized": {
+        "performed_instantiations": 0
+      },
+      "preprocessing_time": 0.008776421
+    }
+  }
+}

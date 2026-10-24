@@ -1,0 +1,20 @@
+{
+  "created_at": "2026-10-24T02:30:52.328084+00:00",
+  "monotonic_ns": 505609967838102,
+  "campaign_sha256": "725d786dc5fa9b82dda56deb46b4d1fa37159052dea13e2901c3e5e07db4ee1b",
+  "loadavg": [
+    6.4677734375,
+    8.88330078125,
+    10.1015625
+  ],
+  "affinity": [
+    0
+  ],
+  "thread_env": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "RAYON_NUM_THREADS": "1",
+    "QISKIT_NUM_PROCS": "1"
+  }
+}

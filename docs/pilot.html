@@ -18,18 +18,22 @@
     pre code{background:none;padding:0}
     blockquote{border-left:3px solid #8d77e5;padding-left:20px;color:var(--muted)}
     @media(max-width:600px){main{padding:20px}h1{font-size:26px}}
-    </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><a href="../diagnostics/compile-retention/index.html">Compile retention diagnostic</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="pilot-protocol-and-preserved-measurements">Pilot protocol and preserved measurements</h1>
+    </style></head><body><main><nav aria-label="Documentation navigation"><a href="../index.html">← Results</a><a href="pilot.html">Protocol</a><a href="methodology.html">Scoring</a><a href="research.html">Sources</a><a href="../diagnostics/compile-retention/index.html">Compile retention diagnostic (QCEC 3.10.1)</a><a href="../diagnostics/compile-retention-v2-qcec3102/index.html">Compile retention diagnostic (QCEC 3.10.2)</a><label class="theme-control" for="theme">Theme<select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system" selected>System</option></select></label></nav><h1 id="pilot-protocol-and-preserved-measurements">Pilot protocol and preserved measurements</h1>
 <h2 id="new-standalone-compile-retention-not-a-historical-backfill">New standalone compile retention (not a historical backfill)</h2>
 <p>The opt-in <code>retention-campaign</code> / <code>retention-run</code> path uses a new standalone
 spec/result/seal v3, without changing the historical worker, data or scores below.
-The same <code>atlas.compile_once</code> recipes and locked QCEC 3.10.1 are retained. Three
-compilations are committed create-only as QASM, actual native QPY and compile
+The same <code>atlas.compile_once</code> recipes are retained. New v2 creation uses locked
+QCEC 3.10.2 with <code>verify_with_hard_timeout</code>; sealed v1 remains QCEC 3.10.1 and is
+read without re-verification. Their suite and verifier identities cannot be mixed.
+Three compilations are committed create-only as QASM, actual native QPY and compile
 manifests before any strict check. Time, raw metrics, maps, scalar phase and hashes
 are retained even when verification cannot finish.</p>
 <p>One job deadline is 420 seconds including startup/export/storage/checks; each
 fresh checker gets min(60 seconds, remaining time), with the existing cooperative
 20-second QCEC timeout. The parent kills the process group and reaps direct and
-adopted descendants before another job starts. Cleanup is separately recorded.</p>
+adopted descendants before another job starts. V2 reserves 1 second inside each
+check cap for its API timeout receipt, without extending either deadline. The
+outer backstop also bounds caller-side serialization. Cleanup is separately recorded.</p>
 <p>Primary precedence is <code>error &gt; compile_incomplete &gt; not_equivalent &gt;
 verification_incomplete &gt; passed</code>. Only returned <code>not_equivalent</code> is an explicit
 mismatch; unfinished criteria, hard timeout and exhausted budget are not. Passing
@@ -43,7 +47,9 @@ Partial-repeat scoring has a new name, <code>qcec-adjusted-partial-v2</code>; hi
 54 repeats before execution, with shuffle seed 20261004. It adds no reference
 rows, so adjusted scores are N/A while raw values remain visible. Shared-host
 timings are diagnostic, not performance comparisons. No selective retry, resume,
-backfill, old/new merge or publication is authorized by this operation.
+backfill or old/new merge is allowed. The approved 3.10.2 rerun is archived and
+displayed as a separate diagnostic beside v1, not in the 13-configuration ranking.
+No push, PR or root publication-selector change is authorized.
 The seal requires all scheduled terminal facts and re-derived hashes, native
 metrics, maps, phase, classifications and medians. It authenticates complete
 evidence, not universal success. Cancellation, missing jobs or tampering refuse
